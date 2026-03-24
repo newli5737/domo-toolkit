@@ -1,0 +1,19 @@
+[project]
+name = "domo-toolkit"
+version = "0.1.0"
+description = "DOMO Toolkit Web App — Quản lý và phân tích Beast Mode, Card, DataFlow"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "psycopg2-binary>=2.9.0",
+    "requests>=2.31.0",
+    "aiohttp>=3.9.0",
+    "playwright>=1.40.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.scripts]
+domo = "app.main:start"
