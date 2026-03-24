@@ -203,5 +203,28 @@ class DomoDatabase:
             errors INTEGER DEFAULT 0,
             started_at TIMESTAMP,
             finished_at TIMESTAMP,
-            message TEXT
+            message TEXT,
+            current_step INTEGER DEFAULT 0,
+            total_steps INTEGER DEFAULT 5,
+            step_name TEXT DEFAULT '',
+            step_processed INTEGER DEFAULT 0,
+            step_total INTEGER DEFAULT 0
         """)
+
+        # Migrate: add step columns if missing
+        try:
+            self.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                   WHERE table_name='crawl_jobs' AND column_name='current_step') THEN
+                        ALTER TABLE crawl_jobs ADD COLUMN current_step INTEGER DEFAULT 0;
+                        ALTER TABLE crawl_jobs ADD COLUMN total_steps INTEGER DEFAULT 5;
+                        ALTER TABLE crawl_jobs ADD COLUMN step_name TEXT DEFAULT '';
+                        ALTER TABLE crawl_jobs ADD COLUMN step_processed INTEGER DEFAULT 0;
+                        ALTER TABLE crawl_jobs ADD COLUMN step_total INTEGER DEFAULT 0;
+                    END IF;
+                END $$;
+            """)
+        except Exception:
+            pass

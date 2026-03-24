@@ -4,6 +4,7 @@ import re
 import json
 import hashlib
 import asyncio
+import time
 from datetime import datetime
 from aiohttp import ClientSession
 
@@ -29,11 +30,13 @@ class BeastModeService:
 
     # ─── Crawl tất cả BM ─────────────────────────────────────
 
-    def crawl_all(self, job_id: int = None) -> list[dict]:
+    def crawl_all(self, job_id: int = None, progress_callback=None) -> list[dict]:
         """Crawl toàn bộ Beast Mode qua search API."""
         all_bms = []
         offset = 0
         batch_size = 1000
+
+        log.info(f"Bắt đầu crawl BM (batch_size={batch_size})")
 
         while True:
             payload = {
@@ -44,9 +47,13 @@ class BeastModeService:
                 "offset": offset,
             }
 
+            batch_start = time.time()
             resp = self.api.post(self.SEARCH_URL, json=payload)
+            api_time = time.time() - batch_start
+
             if not resp or resp.status_code != 200:
-                log.error(f"Search thất bại tại offset {offset}")
+                status_code = resp.status_code if resp else "None"
+                log.error(f"Search thất bại tại offset {offset} (status={status_code}, took {api_time:.1f}s)")
                 break
 
             data = resp.json()
@@ -54,6 +61,7 @@ class BeastModeService:
             total_hits = data.get("totalHits", 0)
 
             if not results:
+                log.debug(f"Không còn results tại offset {offset}")
                 break
 
             # Parse và lưu DB
@@ -82,12 +90,13 @@ class BeastModeService:
                     "datasources": json.dumps(datasources),
                 })
 
+            db_start = time.time()
             if rows_bm:
                 self.db.bulk_upsert("beastmodes", rows_bm, "id")
             if rows_card_map:
-                # Xoá mapping cũ rồi insert lại
                 for row in rows_card_map:
                     self.db.upsert("bm_card_map", row, "bm_id, card_id")
+            db_time = time.time() - db_start
 
             all_bms.extend(results)
 
@@ -97,29 +106,37 @@ class BeastModeService:
                     "UPDATE crawl_jobs SET processed = %s, total = %s WHERE id = %s",
                     (len(all_bms), total_hits, job_id)
                 )
+            if progress_callback:
+                progress_callback(len(all_bms), total_hits)
 
-            log.info(f"Crawl BM: {len(all_bms)}/{total_hits}")
+            log.progress(len(all_bms), total_hits, f"Crawl BM")
+            log.debug(f"  API: {api_time:.1f}s | DB: {db_time:.1f}s | batch: {len(results)} rows | card_maps: {len(rows_card_map)}")
 
             if len(results) < batch_size:
                 break
             offset += batch_size
 
+        log.info(f"Crawl BM xong: tổng {len(all_bms)} BM")
         return all_bms
 
     # ─── Fetch chi tiết (async) ───────────────────────────────
 
-    async def fetch_details_batch(self, bm_ids: list[int], job_id: int = None, concurrency: int = 50):
+    async def fetch_details_batch(self, bm_ids: list[int], job_id: int = None,
+                                   concurrency: int = 50, progress_callback=None):
         """Fetch chi tiết từng BM bằng async."""
         sem = asyncio.Semaphore(concurrency)
         total = len(bm_ids)
         processed = 0
+        errors = 0
         dep_rows = []
         update_rows = []
+
+        log.info(f"Bắt đầu fetch details cho {total} BM (concurrency={concurrency})")
 
         async with self.api.create_async_session() as session:
 
             async def fetch_one(bm_id: int):
-                nonlocal processed
+                nonlocal processed, errors
                 async with sem:
                     url = f"{self.api.base_url}{self.DETAIL_URL}/{bm_id}?hidden=true"
                     detail = await self.api.async_get(session, url)
@@ -143,6 +160,10 @@ class BeastModeService:
                                 "bm_id": bm_id,
                                 "depends_on_bm_id": int(dep_id),
                             })
+                    else:
+                        errors += 1
+                        if errors <= 10:
+                            log.warn(f"  Không thể fetch BM #{bm_id}")
 
                     processed += 1
 
@@ -150,10 +171,15 @@ class BeastModeService:
             batch_size = 200
             for i in range(0, total, batch_size):
                 batch = bm_ids[i:i + batch_size]
+                batch_start = time.time()
+
                 tasks = [fetch_one(bm_id) for bm_id in batch]
                 await asyncio.gather(*tasks, return_exceptions=True)
 
+                api_time = time.time() - batch_start
+
                 # Lưu DB theo batch
+                db_start = time.time()
                 if update_rows:
                     for row in update_rows:
                         self.db.execute(
@@ -172,38 +198,49 @@ class BeastModeService:
                             (row["bm_id"], row["depends_on_bm_id"])
                         )
                     dep_rows.clear()
+                db_time = time.time() - db_start
 
                 if job_id:
                     self.db.execute(
                         "UPDATE crawl_jobs SET processed = %s WHERE id = %s",
                         (processed, job_id)
                     )
+                if progress_callback:
+                    progress_callback(processed, total)
 
-                log.info(f"Details: {processed}/{total}")
+                log.progress(processed, total, "BM Details")
+                log.debug(f"  API: {api_time:.1f}s | DB: {db_time:.1f}s | errors: {errors}")
+
+        log.info(f"Fetch details xong: {processed}/{total} (errors: {errors})")
 
     # ─── Phân tích 4 nhóm ────────────────────────────────────
 
     def analyze(self, low_view_threshold: int = 10) -> dict:
         """Phân loại tất cả BM thành 4 nhóm."""
+        log.info("Bắt đầu phân tích...")
 
         # Lấy tất cả BM
         all_bms = self.db.query("SELECT id, name, expression, datasources, legacy_id FROM beastmodes")
+        log.info(f"  Tổng BM trong DB: {len(all_bms)}")
 
         # Map: bm_id → list card_ids (active)
         card_maps = self.db.query("SELECT bm_id, card_id FROM bm_card_map WHERE is_active = TRUE")
         bm_cards = {}
         for row in card_maps:
             bm_cards.setdefault(row["bm_id"], []).append(row["card_id"])
+        log.info(f"  Card mappings: {len(card_maps)} rows, {len(bm_cards)} unique BMs")
 
         # Map: bm_id → list of BM IDs tham chiếu tới nó
         dep_maps = self.db.query("SELECT bm_id, depends_on_bm_id FROM bm_dependency_map")
         referenced_by = {}
         for row in dep_maps:
             referenced_by.setdefault(row["depends_on_bm_id"], []).append(row["bm_id"])
+        log.info(f"  Dependencies: {len(dep_maps)} rows, {len(referenced_by)} referenced BMs")
 
         # Map: card_id → view_count
         cards = self.db.query("SELECT id, view_count FROM cards")
         card_views = {row["id"]: row["view_count"] or 0 for row in cards}
+        log.info(f"  Cards with views: {len(cards)}")
 
         # Phân loại
         results = []
@@ -274,6 +311,17 @@ class BeastModeService:
 
         # Thống kê per dataset
         dataset_stats = self._dataset_stats()
+
+        # Log kết quả
+        log.info("=" * 40)
+        log.success(f"📊 KẾT QUẢ PHÂN TÍCH:")
+        log.info(f"  Tổng BM: {len(all_bms)}")
+        for g, cnt in group_counts.items():
+            pct = (cnt / len(all_bms) * 100) if all_bms else 0
+            log.info(f"  Nhóm {g}: {cnt} ({pct:.1f}%)")
+        log.info(f"  Duplicates: {len(duplicates)} groups")
+        log.info(f"  Naming issues: {sum(1 for r in results if r['naming_flag'])}")
+        log.info("=" * 40)
 
         return {
             "total": len(all_bms),

@@ -11,6 +11,15 @@ interface CrawlStatus {
   message: string
   started_at: string | null
   finished_at: string | null
+  // Step tracking
+  current_step: number
+  total_steps: number
+  step_name: string
+  step_processed: number
+  step_total: number
+  step_percent: number
+  overall_percent: number
+  elapsed_seconds: number
 }
 
 interface GroupInfo {
@@ -71,6 +80,24 @@ const BADGE_BG: Record<string, string> = {
   green: 'bg-[var(--color-accent-green)]/15 text-[var(--color-accent-green)]',
 }
 
+const STEP_ICONS = ['🔍', '📋', '🃏', '👁️', '📊']
+const STEP_LABELS = ['Crawl BM', 'BM Details', 'Crawl Cards', 'View Counts', 'Phân tích']
+
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}m ${s}s`
+}
+
+function estimateRemaining(elapsed: number, percent: number): string {
+  if (percent <= 0 || elapsed <= 0) return '—'
+  const totalEstimate = (elapsed / percent) * 100
+  const remaining = Math.max(0, Math.round(totalEstimate - elapsed))
+  if (remaining === 0) return 'sắp xong'
+  return `~${formatTime(remaining)}`
+}
+
 export default function BeastModeCleanup() {
   const [crawlStatus, setCrawlStatus] = useState<CrawlStatus | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -113,7 +140,22 @@ export default function BeastModeCleanup() {
   const startCrawl = async () => {
     try {
       setCrawling(true)
+      setSummary(null)
+      setCrawlStatus(null)
       await apiPost('/api/beastmode/crawl')
+      startPolling()
+    } catch (err) {
+      setCrawling(false)
+      alert(err instanceof Error ? err.message : 'Lỗi')
+    }
+  }
+
+  const startReanalyze = async () => {
+    try {
+      setCrawling(true)
+      setSummary(null)
+      setCrawlStatus(null)
+      await apiPost('/api/beastmode/crawl/reanalyze')
       startPolling()
     } catch (err) {
       setCrawling(false)
@@ -137,7 +179,7 @@ export default function BeastModeCleanup() {
       } catch {
         // ignore
       }
-    }, 2000)
+    }, 1500)
   }
 
   const loadSummary = async () => {
@@ -161,10 +203,6 @@ export default function BeastModeCleanup() {
     }
   }
 
-  const progress = crawlStatus && crawlStatus.total > 0
-    ? Math.round((crawlStatus.processed / crawlStatus.total) * 100)
-    : 0
-
   const getGroupCount = (num: number) => {
     if (!summary) return 0
     const g = summary.groups.find(g => g.group_number === num)
@@ -181,12 +219,21 @@ export default function BeastModeCleanup() {
         </div>
         <div className="flex gap-3">
           {summary && (
-            <button
-              onClick={() => apiDownload('/api/beastmode/export/csv')}
-              className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
-            >
-              ⬇ Export CSV
-            </button>
+            <>
+              <button
+                onClick={() => apiDownload('/api/beastmode/export/csv')}
+                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
+              >
+                ⬇ Export CSV
+              </button>
+              <button
+                onClick={startReanalyze}
+                disabled={crawling}
+                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-orange)] to-[var(--color-accent-yellow)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-orange)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                🔄 Reanalyze
+              </button>
+            </>
           )}
           <button
             onClick={startCrawl}
@@ -205,21 +252,148 @@ export default function BeastModeCleanup() {
         </div>
       </div>
 
-      {/* Progress */}
+      {/* === CRAWL PROGRESS PANEL === */}
       {crawling && crawlStatus && (
-        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-8">
-          <div className="text-center mb-4">
-            <p className="text-sm text-gray-400">{crawlStatus.message}</p>
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+          {/* Header with elapsed time */}
+          <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-blue)]/15 flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-[var(--color-accent-blue)]/30 border-t-[var(--color-accent-blue)] rounded-full animate-spin" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Đang crawl dữ liệu</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{crawlStatus.message}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Đã chạy</p>
+                  <p className="text-sm font-mono font-semibold text-[var(--color-accent-cyan)]">
+                    {formatTime(crawlStatus.elapsed_seconds || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Còn lại</p>
+                  <p className="text-sm font-mono font-semibold text-[var(--color-accent-orange)]">
+                    {estimateRemaining(crawlStatus.elapsed_seconds || 0, crawlStatus.overall_percent || 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="w-full h-2 bg-[var(--color-bg-secondary)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-cyan)] rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
+
+          {/* Overall progress bar */}
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500">Tổng tiến trình</span>
+              <span className="text-sm font-bold text-[var(--color-accent-cyan)]">
+                {crawlStatus.overall_percent || 0}%
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-[var(--color-bg-secondary)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-cyan)] rounded-full transition-all duration-700 ease-out relative"
+                style={{ width: `${crawlStatus.overall_percent || 0}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
+              </div>
+            </div>
           </div>
-          <div className="flex justify-between mt-3 text-xs text-gray-500">
-            <span>{crawlStatus.processed.toLocaleString()} / {crawlStatus.total.toLocaleString()}</span>
-            <span className="font-semibold text-[var(--color-accent-cyan)]">{progress}%</span>
+
+          {/* Steps timeline */}
+          <div className="px-6 pb-5">
+            {(() => {
+              const totalSteps = crawlStatus.total_steps || 5
+              const isFullCrawl = totalSteps === 5
+              const stepLabels = isFullCrawl
+                ? STEP_LABELS
+                : Array.from({ length: totalSteps }, (_, i) =>
+                    crawlStatus.current_step === i + 1 ? crawlStatus.step_name : `Step ${i + 1}`
+                  )
+              const stepIcons = isFullCrawl
+                ? STEP_ICONS
+                : totalSteps === 2 ? ['👁️', '📊'] : STEP_ICONS.slice(0, totalSteps)
+              const gridClass = totalSteps <= 2 ? 'grid-cols-2' : totalSteps <= 3 ? 'grid-cols-3' : 'grid-cols-5'
+
+              return (
+            <div className={`grid ${gridClass} gap-2`}>
+              {stepLabels.map((label, idx) => {
+                const stepNum = idx + 1
+                const isCurrent = crawlStatus.current_step === stepNum
+                const isDone = crawlStatus.current_step > stepNum
+                const isPending = crawlStatus.current_step < stepNum
+
+                // Step-level progress
+                const stepPct = isCurrent ? (crawlStatus.step_percent || 0) : isDone ? 100 : 0
+                const stepDetail = isCurrent && crawlStatus.step_total > 0
+                  ? `${crawlStatus.step_processed.toLocaleString()} / ${crawlStatus.step_total.toLocaleString()}`
+                  : ''
+
+                return (
+                  <div
+                    key={stepNum}
+                    className={`relative rounded-lg p-3 transition-all duration-300 ${
+                      isCurrent
+                        ? 'bg-[var(--color-accent-blue)]/10 border border-[var(--color-accent-blue)]/30 shadow-lg shadow-[var(--color-accent-blue)]/5'
+                        : isDone
+                          ? 'bg-[var(--color-accent-green)]/5 border border-[var(--color-accent-green)]/20'
+                          : 'bg-[var(--color-bg-secondary)]/50 border border-transparent'
+                    }`}
+                  >
+                    {/* Step icon + label */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-base ${isPending ? 'grayscale opacity-40' : ''}`}>
+                        {isDone ? '✅' : (stepIcons[idx] || '⏳')}
+                      </span>
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                        isCurrent ? 'text-[var(--color-accent-blue)]'
+                        : isDone ? 'text-[var(--color-accent-green)]'
+                        : 'text-gray-600'
+                      }`}>
+                        {label}
+                      </span>
+                    </div>
+
+                    {/* Progress bar inside step */}
+                    <div className="w-full h-1.5 bg-[var(--color-bg-primary)] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isDone
+                            ? 'bg-[var(--color-accent-green)]'
+                            : isCurrent
+                              ? 'bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-cyan)]'
+                              : 'bg-gray-700'
+                        }`}
+                        style={{ width: `${stepPct}%` }}
+                      />
+                    </div>
+
+                    {/* Step detail */}
+                    <div className="mt-1.5 h-4">
+                      {isCurrent && (
+                        <p className="text-[10px] text-gray-500 font-mono">
+                          {stepDetail || `${stepPct}%`}
+                        </p>
+                      )}
+                      {isDone && (
+                        <p className="text-[10px] text-[var(--color-accent-green)]">Xong ✓</p>
+                      )}
+                    </div>
+
+                    {/* Pulsing dot for current */}
+                    {isCurrent && (
+                      <div className="absolute top-2 right-2">
+                        <div className="w-2 h-2 rounded-full bg-[var(--color-accent-blue)] animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+              )
+            })()}
           </div>
         </div>
       )}
