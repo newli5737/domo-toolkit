@@ -85,6 +85,39 @@ def login():
     )
 
 
+@router.post("/upload-cookies", response_model=LoginResponse)
+async def upload_cookies(payload: dict):
+    """Import cookies từ J2 Team Cookie extension export JSON.
+    Format: {"url": "...", "cookies": [{"name": "...", "value": "...", ...}]}
+    """
+    auth = get_auth()
+    result = auth.load_from_j2_cookies(payload)
+
+    if result["success"]:
+        try:
+            db = get_db()
+            db.execute(
+                "UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE"
+            )
+            db.upsert("domo_sessions", {
+                "id": 1,
+                "username": auth.username,
+                "cookies_json": json.dumps(auth.cookies),
+                "csrf_token": auth.csrf_token,
+                "logged_in_at": datetime.now().isoformat(),
+                "is_active": True,
+            }, "id")
+            db.close()
+        except Exception:
+            pass
+
+    return LoginResponse(
+        success=result["success"],
+        message=result["message"],
+        username=auth.username if result["success"] else "",
+    )
+
+
 @router.get("/status")
 async def auth_status():
     """Kiểm tra session hiện tại."""
@@ -92,4 +125,5 @@ async def auth_status():
     return {
         "logged_in": auth.is_valid,
         "username": auth.username if auth.is_valid else "",
+        "domo_url": f"https://{get_settings().domo_instance}",
     }

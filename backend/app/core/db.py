@@ -189,7 +189,21 @@ class DomoDatabase:
             naming_flag TEXT,
             complexity_score INTEGER DEFAULT 0,
             duplicate_hash TEXT,
-            url TEXT
+            url TEXT,
+            legacy_id TEXT
+        """)
+
+        # Lịch sử xóa BM — lưu state cũ card definition
+        self.ensure_table("bm_delete_log", """
+            id SERIAL PRIMARY KEY,
+            bm_id BIGINT NOT NULL,
+            bm_name TEXT,
+            bm_legacy_id TEXT,
+            card_id TEXT NOT NULL,
+            card_definition_json TEXT,
+            status TEXT DEFAULT 'pending',
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
         """)
 
         # Crawl jobs tracking

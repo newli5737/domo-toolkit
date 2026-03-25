@@ -83,7 +83,7 @@ class DomoAuth:
                             await asyncio.sleep(2) # Chờ 2s cho trang load nốt session JS
                             
                             cookies = await context.cookies() # Lấy lại vòng cuối
-                            self._cookies = {c["name"]: c["value"] for c in cookies}
+                            self._cookies = {c["name"]: c["value"] for c in cookies if c.get("name")}
                             
                             if token:
                                 self._csrf_token = token
@@ -126,7 +126,8 @@ class DomoAuth:
 
     def load_from_dict(self, data: dict):
         """Load session từ dict (đã lưu trong DB)."""
-        self._cookies = data.get("cookies", {})
+        raw_cookies = data.get("cookies", {})
+        self._cookies = {k: v for k, v in raw_cookies.items() if k is not None}
         self._csrf_token = data.get("csrf_token", "")
         self._username = data.get("username", "")
         self._logged_in_at = datetime.fromisoformat(data["logged_in_at"]) if data.get("logged_in_at") else None
@@ -144,4 +145,41 @@ class DomoAuth:
             "csrf_token": self._csrf_token,
             "username": self._username,
             "logged_in_at": self._logged_in_at.isoformat() if self._logged_in_at else None,
+        }
+
+    def load_from_j2_cookies(self, data: dict) -> dict:
+        """Load session từ J2 Team cookie export JSON.
+        Format: {"url": "...", "cookies": [{"name": "...", "value": "...", ...}]}
+        """
+        cookie_list = data.get("cookies", [])
+        if not cookie_list:
+            return {"success": False, "message": "Không tìm thấy cookies trong file JSON."}
+
+        # Build cookie dict, filter None name
+        self._cookies = {
+            c["name"]: c["value"]
+            for c in cookie_list
+            if c.get("name") and c.get("value") is not None
+        }
+
+        if not self._cookies:
+            return {"success": False, "message": "Không có cookie hợp lệ nào."}
+
+        # Tìm csrf-token từ cookie
+        csrf = self._cookies.get("csrf-token", "")
+        self._csrf_token = csrf
+
+        self._headers = {
+            "x-csrf-token": self._csrf_token,
+            "x-requested-with": "XMLHttpRequest",
+            "content-type": "application/json",
+            "accept": "application/json",
+        }
+
+        self._logged_in_at = datetime.now()
+        self._username = "Cookie Upload"
+
+        return {
+            "success": True,
+            "message": f"Đã import {len(self._cookies)} cookies thành công!",
         }

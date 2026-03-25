@@ -39,7 +39,7 @@ app.include_router(beastmode.router)
 
 @app.on_event("startup")
 def startup():
-    """Tạo bảng DB khi khởi động."""
+    """Tạo bảng DB khi khởi động + cleanup stale jobs."""
     settings = get_settings()
     db = DomoDatabase(
         host=settings.db_host, port=settings.db_port,
@@ -49,6 +49,10 @@ def startup():
     db.init_schema()
     db.close()
     print(f"✅ DB schema initialized ({settings.db_name})")
+
+    # Hủy các crawl job cũ đang bị treo
+    from app.routers.beastmode import cleanup_stale_jobs
+    cleanup_stale_jobs()
 
 
 @app.get("/api/health")

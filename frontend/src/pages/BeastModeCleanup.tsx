@@ -1,25 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
-import { apiGet, apiPost, apiDownload } from '../api'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { apiGet, apiPost, apiDownload, apiDelete } from '../api'
 
-interface CrawlStatus {
-  job_id: number
+interface StepProgress {
+  name: string
   status: string
-  total: number
   processed: number
-  found: number
-  errors: number
+  total: number
+  percent: number
+}
+
+interface CrawlProgress {
+  status: string
+  job_id: number | null
+  started_at: number | null
+  elapsed: number
   message: string
-  started_at: string | null
-  finished_at: string | null
-  // Step tracking
-  current_step: number
-  total_steps: number
-  step_name: string
-  step_processed: number
-  step_total: number
-  step_percent: number
-  overall_percent: number
-  elapsed_seconds: number
+  steps: Record<string, StepProgress>
 }
 
 interface GroupInfo {
@@ -39,6 +35,7 @@ interface Summary {
 interface BmRow {
   bm_id: number
   bm_name: string
+  legacy_id: string
   group_number: number
   group_label: string
   active_cards_count: number
@@ -98,52 +95,76 @@ function estimateRemaining(elapsed: number, percent: number): string {
   return `~${formatTime(remaining)}`
 }
 
-export default function BeastModeCleanup() {
-  const [crawlStatus, setCrawlStatus] = useState<CrawlStatus | null>(null)
+interface Props {
+  readOnly?: boolean
+}
+
+export default function BeastModeCleanup({ readOnly = false }: Props) {
+  const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [activeTab, setActiveTab] = useState(1)
   const [groupData, setGroupData] = useState<BmRow[]>([])
   const [loadingGroup, setLoadingGroup] = useState(false)
   const [crawling, setCrawling] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
 
-  // Kiểm tra trạng thái crawl khi mount
-  useEffect(() => {
-    checkStatus()
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<BmRow[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<BmRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  // WebSocket connection
+  const connectWs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${protocol}//localhost:8000/api/beastmode/ws/progress`)
+    wsRef.current = ws
+
+    ws.onmessage = (event) => {
+      try {
+        const data: CrawlProgress = JSON.parse(event.data)
+        setCrawlProgress(data)
+        if (data.status === 'running') {
+          setCrawling(true)
+        } else if (data.status === 'done' || data.status === 'error' || data.status === 'cancelled') {
+          setCrawling(false)
+          if (data.status === 'done') loadSummary()
+        }
+      } catch { /* ignore */ }
+    }
+
+    ws.onclose = () => {
+      // Reconnect after 3 seconds
+      setTimeout(() => connectWs(), 3000)
     }
   }, [])
 
-  // Load group data khi đổi tab
   useEffect(() => {
-    if (summary) {
-      loadGroupData(activeTab)
+    connectWs()
+    loadSummary()
+    return () => {
+      wsRef.current?.close()
     }
-  }, [activeTab, summary])
+  }, [])
 
-  const checkStatus = async () => {
-    try {
-      const status = await apiGet<CrawlStatus>('/api/beastmode/status')
-      setCrawlStatus(status)
-      if (status.status === 'running') {
-        setCrawling(true)
-        startPolling()
-      } else if (status.status === 'done') {
-        loadSummary()
-      }
-    } catch {
-      // Chưa có crawl nào
-    }
-  }
+  // Load group data khi đổi tab (chỉ khi không search)
+  useEffect(() => {
+    if (!searchQuery) loadGroupData(activeTab)
+  }, [activeTab, summary])
 
   const startCrawl = async () => {
     try {
       setCrawling(true)
       setSummary(null)
-      setCrawlStatus(null)
+      setCrawlProgress(null)
+      connectWs()
       await apiPost('/api/beastmode/crawl')
-      startPolling()
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -154,32 +175,35 @@ export default function BeastModeCleanup() {
     try {
       setCrawling(true)
       setSummary(null)
-      setCrawlStatus(null)
+      setCrawlProgress(null)
+      connectWs()
       await apiPost('/api/beastmode/crawl/reanalyze')
-      startPolling()
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
     }
   }
 
-  const startPolling = () => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(async () => {
-      try {
-        const status = await apiGet<CrawlStatus>('/api/beastmode/status')
-        setCrawlStatus(status)
-        if (status.status === 'done' || status.status === 'error') {
-          if (pollRef.current) clearInterval(pollRef.current)
-          setCrawling(false)
-          if (status.status === 'done') {
-            loadSummary()
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }, 1500)
+  const cancelCrawl = async () => {
+    try {
+      await apiPost('/api/beastmode/crawl/cancel')
+      setCrawling(false)
+    } catch (err) {
+      console.error('Cancel error:', err)
+    }
+  }
+
+  const retryDetails = async () => {
+    try {
+      setCrawling(true)
+      setSummary(null)
+      setCrawlProgress(null)
+      connectWs()
+      await apiPost('/api/beastmode/crawl/retry-details')
+    } catch (err) {
+      setCrawling(false)
+      alert(err instanceof Error ? err.message : 'Lỗi')
+    }
   }
 
   const loadSummary = async () => {
@@ -203,6 +227,51 @@ export default function BeastModeCleanup() {
     }
   }
 
+  const handleSearch = (value: string) => {
+    setSearchQuery(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+
+    if (!value.trim()) {
+      setSearchResults(null)
+      loadGroupData(activeTab)
+      return
+    }
+
+    searchTimerRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const data = await apiGet<{ data: BmRow[] }>(`/api/beastmode/search?q=${encodeURIComponent(value)}&limit=50`)
+        setSearchResults(data.data)
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 400)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteResult(null)
+    try {
+      await apiDelete(`/api/beastmode/${deleteTarget.bm_id}`)
+      setDeleteResult({ success: true, message: `Đã xóa BM "${deleteTarget.bm_name}" thành công!` })
+      // Reload
+      setTimeout(() => {
+        if (searchQuery) handleSearch(searchQuery)
+        else loadGroupData(activeTab)
+        loadSummary()
+        setDeleteTarget(null)
+        setDeleteResult(null)
+      }, 2000)
+    } catch (err) {
+      setDeleteResult({ success: false, message: err instanceof Error ? err.message : 'Xóa thất bại' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const getGroupCount = (num: number) => {
     if (!summary) return 0
     const g = summary.groups.find(g => g.group_number === num)
@@ -215,47 +284,67 @@ export default function BeastModeCleanup() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Beast Mode Cleanup</h2>
-          <p className="text-sm text-gray-400 mt-1">Phân tích và phân loại Beast Mode dư thừa</p>
+          <p className="text-sm text-gray-400 mt-1">
+            {readOnly ? 'Xem kết quả phân tích Beast Mode' : 'Phân tích và phân loại Beast Mode dư thừa'}
+          </p>
         </div>
-        <div className="flex gap-3">
-          {summary && (
-            <>
-              <button
-                onClick={() => apiDownload('/api/beastmode/export/csv')}
-                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
-              >
-                ⬇ Export CSV
-              </button>
-              <button
-                onClick={startReanalyze}
-                disabled={crawling}
-                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-orange)] to-[var(--color-accent-yellow)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-orange)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                🔄 Reanalyze
-              </button>
-            </>
-          )}
-          <button
-            onClick={startCrawl}
-            disabled={crawling}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-purple)] text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-blue)]/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none flex items-center gap-2"
-          >
-            {crawling ? (
+        {!readOnly && (
+          <div className="flex gap-3">
+            {summary && (
               <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Đang crawl...
+                <button
+                  onClick={() => apiDownload('/api/beastmode/export/csv')}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
+                >
+                  ⬇ Export CSV
+                </button>
+                <button
+                  onClick={startReanalyze}
+                  disabled={crawling}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-orange)] to-[var(--color-accent-yellow)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-orange)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  🔄 Reanalyze
+                </button>
+                <button
+                  onClick={retryDetails}
+                  disabled={crawling}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-cyan)] to-[var(--color-accent-blue)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-cyan)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  🔄 Retry Details
+                </button>
               </>
-            ) : (
-              '🔍 Bắt đầu Crawl'
             )}
-          </button>
-        </div>
+            <button
+              onClick={startCrawl}
+              disabled={crawling}
+              className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-purple)] text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-blue)]/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none flex items-center gap-2"
+            >
+              {crawling ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Đang crawl...
+                </>
+              ) : (
+                '🔍 Bắt đầu Crawl'
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* === CRAWL PROGRESS PANEL === */}
-      {crawling && crawlStatus && (
+      {crawling && crawlProgress && (() => {
+        const steps = crawlProgress.steps || {}
+        const stepKeys = Object.keys(steps).sort()
+        const totalSteps = stepKeys.length || 5
+        const overallPercent = totalSteps > 0
+          ? Math.round(stepKeys.reduce((sum, k) => sum + (steps[k]?.percent || 0), 0) / totalSteps)
+          : 0
+        const gridClass = totalSteps <= 2 ? 'grid-cols-2' : totalSteps <= 3 ? 'grid-cols-3' : 'grid-cols-5'
+
+        return (
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-          {/* Header with elapsed time */}
+          {/* Header */}
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-blue)]/15 flex items-center justify-center">
@@ -263,23 +352,27 @@ export default function BeastModeCleanup() {
               </div>
               <div>
                 <h3 className="font-semibold text-sm">Đang crawl dữ liệu</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{crawlStatus.message}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{crawlProgress.message}</p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Đã chạy</p>
-                  <p className="text-sm font-mono font-semibold text-[var(--color-accent-cyan)]">
-                    {formatTime(crawlStatus.elapsed_seconds || 0)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Còn lại</p>
-                  <p className="text-sm font-mono font-semibold text-[var(--color-accent-orange)]">
-                    {estimateRemaining(crawlStatus.elapsed_seconds || 0, crawlStatus.overall_percent || 0)}
-                  </p>
-                </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={cancelCrawl}
+                className="px-3 py-1.5 rounded-lg bg-[var(--color-accent-red)]/15 text-[var(--color-accent-red)] text-xs font-medium hover:bg-[var(--color-accent-red)]/25 transition-all"
+              >
+                ✕ Hủy
+              </button>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Đã chạy</p>
+                <p className="text-sm font-mono font-semibold text-[var(--color-accent-cyan)]">
+                  {formatTime(crawlProgress.elapsed || 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Còn lại</p>
+                <p className="text-sm font-mono font-semibold text-[var(--color-accent-orange)]">
+                  {estimateRemaining(crawlProgress.elapsed || 0, overallPercent)}
+                </p>
               </div>
             </div>
           </div>
@@ -289,51 +382,35 @@ export default function BeastModeCleanup() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-gray-500">Tổng tiến trình</span>
               <span className="text-sm font-bold text-[var(--color-accent-cyan)]">
-                {crawlStatus.overall_percent || 0}%
+                {overallPercent}%
               </span>
             </div>
             <div className="w-full h-2.5 bg-[var(--color-bg-secondary)] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-[var(--color-accent-blue)] to-[var(--color-accent-cyan)] rounded-full transition-all duration-700 ease-out relative"
-                style={{ width: `${crawlStatus.overall_percent || 0}%` }}
+                style={{ width: `${overallPercent}%` }}
               >
                 <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
               </div>
             </div>
           </div>
 
-          {/* Steps timeline */}
+          {/* Steps timeline (per-step) */}
           <div className="px-6 pb-5">
-            {(() => {
-              const totalSteps = crawlStatus.total_steps || 5
-              const isFullCrawl = totalSteps === 5
-              const stepLabels = isFullCrawl
-                ? STEP_LABELS
-                : Array.from({ length: totalSteps }, (_, i) =>
-                    crawlStatus.current_step === i + 1 ? crawlStatus.step_name : `Step ${i + 1}`
-                  )
-              const stepIcons = isFullCrawl
-                ? STEP_ICONS
-                : totalSteps === 2 ? ['👁️', '📊'] : STEP_ICONS.slice(0, totalSteps)
-              const gridClass = totalSteps <= 2 ? 'grid-cols-2' : totalSteps <= 3 ? 'grid-cols-3' : 'grid-cols-5'
-
-              return (
             <div className={`grid ${gridClass} gap-2`}>
-              {stepLabels.map((label, idx) => {
-                const stepNum = idx + 1
-                const isCurrent = crawlStatus.current_step === stepNum
-                const isDone = crawlStatus.current_step > stepNum
-                const isPending = crawlStatus.current_step < stepNum
-
-                // Step-level progress
-                const stepPct = isCurrent ? (crawlStatus.step_percent || 0) : isDone ? 100 : 0
-                const stepDetail = isCurrent && crawlStatus.step_total > 0
-                  ? `${crawlStatus.step_processed.toLocaleString()} / ${crawlStatus.step_total.toLocaleString()}`
+              {stepKeys.map((key) => {
+                const step = steps[key]
+                const isCurrent = step.status === 'running'
+                const isDone = step.status === 'done'
+                const isPending = step.status === 'pending'
+                const stepPct = step.percent || 0
+                const stepDetail = step.total > 0
+                  ? `${step.processed.toLocaleString()} / ${step.total.toLocaleString()}`
                   : ''
 
                 return (
                   <div
-                    key={stepNum}
+                    key={key}
                     className={`relative rounded-lg p-3 transition-all duration-300 ${
                       isCurrent
                         ? 'bg-[var(--color-accent-blue)]/10 border border-[var(--color-accent-blue)]/30 shadow-lg shadow-[var(--color-accent-blue)]/5'
@@ -342,21 +419,19 @@ export default function BeastModeCleanup() {
                           : 'bg-[var(--color-bg-secondary)]/50 border border-transparent'
                     }`}
                   >
-                    {/* Step icon + label */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`text-base ${isPending ? 'grayscale opacity-40' : ''}`}>
-                        {isDone ? '✅' : (stepIcons[idx] || '⏳')}
+                        {isDone ? '✅' : (STEP_ICONS[Number(key) - 1] || '⏳')}
                       </span>
                       <span className={`text-[10px] font-semibold uppercase tracking-wider ${
                         isCurrent ? 'text-[var(--color-accent-blue)]'
                         : isDone ? 'text-[var(--color-accent-green)]'
                         : 'text-gray-600'
                       }`}>
-                        {label}
+                        {step.name}
                       </span>
                     </div>
 
-                    {/* Progress bar inside step */}
                     <div className="w-full h-1.5 bg-[var(--color-bg-primary)] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
@@ -370,7 +445,6 @@ export default function BeastModeCleanup() {
                       />
                     </div>
 
-                    {/* Step detail */}
                     <div className="mt-1.5 h-4">
                       {isCurrent && (
                         <p className="text-[10px] text-gray-500 font-mono">
@@ -382,7 +456,6 @@ export default function BeastModeCleanup() {
                       )}
                     </div>
 
-                    {/* Pulsing dot for current */}
                     {isCurrent && (
                       <div className="absolute top-2 right-2">
                         <div className="w-2 h-2 rounded-full bg-[var(--color-accent-blue)] animate-pulse" />
@@ -392,16 +465,15 @@ export default function BeastModeCleanup() {
                 )
               })}
             </div>
-              )
-            })()}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Error */}
-      {crawlStatus?.status === 'error' && (
+      {crawlProgress?.status === 'error' && (
         <div className="px-5 py-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[var(--color-accent-red)] text-sm">
-          ❌ Crawl thất bại: {crawlStatus.message}
+          ❌ Crawl thất bại: {crawlProgress.message}
         </div>
       )}
 
@@ -411,7 +483,9 @@ export default function BeastModeCleanup() {
           <div className="text-6xl mb-5">🔮</div>
           <h3 className="text-xl font-semibold text-gray-300 mb-2">Chưa có dữ liệu</h3>
           <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-            Nhấn "Bắt đầu Crawl" để quét toàn bộ Beast Mode trong Domo instance
+            {readOnly
+              ? 'Dữ liệu chưa được crawl. Vui lòng truy cập trang Admin để bắt đầu crawl.'
+              : 'Nhấn "Bắt đầu Crawl" để quét toàn bộ Beast Mode trong Domo instance'}
           </p>
         </div>
       )}
@@ -473,13 +547,38 @@ export default function BeastModeCleanup() {
             </div>
           </div>
 
-          {/* Tabs + Table */}
+          {/* Search + Tabs + Table */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Chi tiết theo nhóm</h3>
+              <h3 className="text-lg font-bold">{searchResults ? `Kết quả tìm kiếm (${searchResults.length})` : 'Chi tiết theo nhóm'}</h3>
             </div>
 
-            {/* Tabs */}
+            {/* Search bar */}
+            <div className="relative mb-4">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => handleSearch(e.target.value)}
+                placeholder="🔍 Tìm theo tên hoặc ID..."
+                className="w-full px-5 py-3 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border)] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[var(--color-accent-cyan)] focus:shadow-[0_0_0_2px] focus:shadow-[var(--color-accent-cyan)]/10 transition-all"
+              />
+              {searching && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-[var(--color-accent-cyan)] rounded-full animate-spin" />
+                </div>
+              )}
+              {searchQuery && !searching && (
+                <button
+                  onClick={() => handleSearch('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Tabs (ẩn khi đang search) */}
+            {!searchResults && (
             <div className="flex gap-1 p-1 bg-[var(--color-bg-secondary)] rounded-lg w-fit mb-5">
               {GROUP_CONFIG.map(g => (
                 <button
@@ -495,23 +594,26 @@ export default function BeastModeCleanup() {
                 </button>
               ))}
             </div>
+            )}
 
             {/* Table */}
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-              {loadingGroup ? (
+              {(loadingGroup || searching) ? (
                 <div className="p-12 text-center">
                   <div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-accent-cyan)] rounded-full animate-spin mx-auto" />
                   <p className="text-sm text-gray-500 mt-3">Đang tải...</p>
                 </div>
-              ) : groupData.length === 0 ? (
+              ) : (searchResults ?? groupData).length === 0 ? (
                 <div className="p-12 text-center text-gray-500 text-sm">
-                  Không có Beast Mode nào trong nhóm này
+                  {searchResults !== null ? 'Không tìm thấy Beast Mode nào' : 'Không có Beast Mode nào trong nhóm này'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[var(--color-border)]">
+                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">ID</th>
+                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Legacy ID</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Tên</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Nhóm</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cards</th>
@@ -519,14 +621,21 @@ export default function BeastModeCleanup() {
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Flag</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Complexity</th>
+                        {!readOnly && (
+                          <th className="px-4 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500">Thao tác</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {groupData.map(bm => {
+                      {(searchResults ?? groupData).map(bm => {
                         const gcfg = GROUP_CONFIG.find(g => g.num === bm.group_number)
                         const badgeColor = gcfg?.color ?? 'cyan'
                         return (
                           <tr key={bm.bm_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-white/[0.02] transition-colors">
+                            <td className="px-4 py-3 text-xs font-mono text-gray-500">{bm.bm_id}</td>
+                            <td className="px-4 py-3 text-xs font-mono text-gray-600 max-w-[120px] truncate" title={bm.legacy_id}>
+                              {bm.legacy_id ? bm.legacy_id.replace('calculation_', '').slice(0, 8) + '…' : '—'}
+                            </td>
                             <td className="px-4 py-3">
                               <a
                                 href={bm.url}
@@ -556,6 +665,16 @@ export default function BeastModeCleanup() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.complexity_score}</td>
+                            {!readOnly && (bm.group_number === 1 || bm.group_number === 2) && (
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  onClick={() => setDeleteTarget(bm)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-accent-red)]/10 text-[var(--color-accent-red)] hover:bg-[var(--color-accent-red)]/20 transition-colors"
+                                >
+                                  🗑️ Xóa
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         )
                       })}
@@ -597,6 +716,72 @@ export default function BeastModeCleanup() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">⚠️</div>
+              <h3 className="text-lg font-bold mb-2">Xác nhận xóa Beast Mode</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                Bạn có chắc muốn xóa BM này khỏi tất cả cards liên kết?
+              </p>
+            </div>
+
+            <div className="bg-[var(--color-bg-secondary)] rounded-lg p-4 mb-6 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">ID:</span>
+                <span className="font-mono font-semibold">{deleteTarget.bm_id}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Tên:</span>
+                <span className="font-semibold text-[var(--color-accent-cyan)] truncate ml-4">{deleteTarget.bm_name}</span>
+              </div>
+              {deleteTarget.legacy_id && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Legacy ID:</span>
+                  <span className="font-mono text-xs text-gray-400 truncate ml-4">{deleteTarget.legacy_id}</span>
+                </div>
+              )}
+            </div>
+
+            {deleteResult && (
+              <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${
+                deleteResult.success
+                  ? 'bg-[var(--color-accent-green)]/10 text-[var(--color-accent-green)]'
+                  : 'bg-[var(--color-accent-red)]/10 text-[var(--color-accent-red)]'
+              }`}>
+                {deleteResult.success ? '✅' : '❌'} {deleteResult.message}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteResult(null) }}
+                disabled={deleting}
+                className="flex-1 px-5 py-2.5 rounded-lg bg-[var(--color-bg-secondary)] text-gray-400 font-semibold text-sm hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting || deleteResult?.success === true}
+                className="flex-1 px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-red)] to-[var(--color-accent-orange)] text-white font-semibold text-sm hover:shadow-lg hover:shadow-[var(--color-accent-red)]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Đang xóa...
+                  </>
+                ) : (
+                  '🗑️ Xóa'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

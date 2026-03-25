@@ -30,8 +30,11 @@ class BeastModeService:
 
     # ─── Crawl tất cả BM ─────────────────────────────────────
 
-    def crawl_all(self, job_id: int = None, progress_callback=None) -> list[dict]:
-        """Crawl toàn bộ Beast Mode qua search API."""
+    def crawl_all(self, job_id: int = None, progress_callback=None,
+                   on_batch_callback=None) -> list[dict]:
+        """Crawl toàn bộ Beast Mode qua search API.
+        on_batch_callback(bm_ids): gọi sau mỗi batch để pipeline xử lý ngay.
+        """
         all_bms = []
         offset = 0
         batch_size = 1000
@@ -67,8 +70,10 @@ class BeastModeService:
             # Parse và lưu DB
             rows_bm = []
             rows_card_map = []
+            batch_bm_ids = []
             for bm in results:
                 bm_id = bm.get("id")
+                batch_bm_ids.append(bm_id)
                 cards = []
                 datasources = []
                 for link in bm.get("links", []):
@@ -100,6 +105,10 @@ class BeastModeService:
 
             all_bms.extend(results)
 
+            # Pipeline callback: gửi batch BM IDs cho Step 2 xử lý ngay
+            if on_batch_callback and batch_bm_ids:
+                on_batch_callback(batch_bm_ids)
+
             # Cập nhật progress
             if job_id:
                 self.db.execute(
@@ -123,11 +132,9 @@ class BeastModeService:
 
     async def fetch_details_batch(self, bm_ids: list[int], job_id: int = None,
                                    concurrency: int = 50, progress_callback=None):
-        """Fetch chi tiết từng BM bằng async."""
-        sem = asyncio.Semaphore(concurrency)
+        """Fetch chi tiết từng BM bằng async. Retry failed IDs."""
         total = len(bm_ids)
-        processed = 0
-        errors = 0
+        all_processed = 0
         dep_rows = []
         update_rows = []
 
@@ -135,83 +142,103 @@ class BeastModeService:
 
         async with self.api.create_async_session() as session:
 
-            async def fetch_one(bm_id: int):
-                nonlocal processed, errors
-                async with sem:
-                    url = f"{self.api.base_url}{self.DETAIL_URL}/{bm_id}?hidden=true"
-                    detail = await self.api.async_get(session, url)
+            async def run_fetch(ids_to_fetch: list[int], sem_limit: int):
+                nonlocal all_processed
+                sem = asyncio.Semaphore(sem_limit)
+                batch_failed = []
+                batch_errors = 0
 
-                    if detail:
-                        expression = detail.get("expression", "")
-                        legacy_id = detail.get("legacyId", "")
-                        col_positions = json.dumps(detail.get("columnPositions", []))
+                async def fetch_one(bm_id: int):
+                    nonlocal all_processed, batch_errors
+                    async with sem:
+                        url = f"{self.api.base_url}{self.DETAIL_URL}/{bm_id}?hidden=true"
+                        detail = await self.api.async_get(session, url)
 
-                        update_rows.append({
-                            "id": bm_id,
-                            "expression": expression,
-                            "legacy_id": legacy_id,
-                            "column_positions": col_positions,
-                        })
+                        if detail:
+                            expression = detail.get("expression", "")
+                            legacy_id = detail.get("legacyId", "")
+                            col_positions = json.dumps(detail.get("columnPositions", []))
 
-                        # Parse BM dependencies
-                        deps = re.findall(r'DOMO_BEAST_MODE\((\d+)\)', expression)
-                        for dep_id in deps:
-                            dep_rows.append({
-                                "bm_id": bm_id,
-                                "depends_on_bm_id": int(dep_id),
+                            update_rows.append({
+                                "id": bm_id,
+                                "expression": expression,
+                                "legacy_id": legacy_id,
+                                "column_positions": col_positions,
                             })
-                    else:
-                        errors += 1
-                        if errors <= 10:
-                            log.warn(f"  Không thể fetch BM #{bm_id}")
 
-                    processed += 1
+                            deps = re.findall(r'DOMO_BEAST_MODE\((\d+)\)', expression)
+                            for dep_id in deps:
+                                dep_rows.append({
+                                    "bm_id": bm_id,
+                                    "depends_on_bm_id": int(dep_id),
+                                })
+                        else:
+                            batch_failed.append(bm_id)
+                            batch_errors += 1
 
-            # Chạy theo batch
-            batch_size = 200
-            for i in range(0, total, batch_size):
-                batch = bm_ids[i:i + batch_size]
-                batch_start = time.time()
+                        all_processed += 1
 
-                tasks = [fetch_one(bm_id) for bm_id in batch]
-                await asyncio.gather(*tasks, return_exceptions=True)
+                batch_size = 200
+                for i in range(0, len(ids_to_fetch), batch_size):
+                    batch = ids_to_fetch[i:i + batch_size]
+                    batch_start = time.time()
 
-                api_time = time.time() - batch_start
+                    tasks = [fetch_one(bm_id) for bm_id in batch]
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Lưu DB theo batch
-                db_start = time.time()
-                if update_rows:
-                    for row in update_rows:
+                    api_time = time.time() - batch_start
+
+                    db_start = time.time()
+                    if update_rows:
+                        for row in update_rows:
+                            self.db.execute(
+                                """UPDATE beastmodes
+                                   SET expression = %s, legacy_id = %s, column_positions = %s
+                                   WHERE id = %s""",
+                                (row["expression"], row["legacy_id"], row["column_positions"], row["id"])
+                            )
+                        update_rows.clear()
+
+                    if dep_rows:
+                        for row in dep_rows:
+                            self.db.execute(
+                                """INSERT INTO bm_dependency_map (bm_id, depends_on_bm_id)
+                                   VALUES (%s, %s) ON CONFLICT DO NOTHING""",
+                                (row["bm_id"], row["depends_on_bm_id"])
+                            )
+                        dep_rows.clear()
+                    db_time = time.time() - db_start
+
+                    if job_id:
                         self.db.execute(
-                            """UPDATE beastmodes
-                               SET expression = %s, legacy_id = %s, column_positions = %s
-                               WHERE id = %s""",
-                            (row["expression"], row["legacy_id"], row["column_positions"], row["id"])
+                            "UPDATE crawl_jobs SET processed = %s WHERE id = %s",
+                            (all_processed, job_id)
                         )
-                    update_rows.clear()
+                    if progress_callback:
+                        progress_callback(all_processed, total)
 
-                if dep_rows:
-                    for row in dep_rows:
-                        self.db.execute(
-                            """INSERT INTO bm_dependency_map (bm_id, depends_on_bm_id)
-                               VALUES (%s, %s) ON CONFLICT DO NOTHING""",
-                            (row["bm_id"], row["depends_on_bm_id"])
-                        )
-                    dep_rows.clear()
-                db_time = time.time() - db_start
+                    log.progress(all_processed, total, "BM Details")
+                    log.debug(f"  API: {api_time:.1f}s | DB: {db_time:.1f}s | errors: {batch_errors}")
 
-                if job_id:
-                    self.db.execute(
-                        "UPDATE crawl_jobs SET processed = %s WHERE id = %s",
-                        (processed, job_id)
-                    )
-                if progress_callback:
-                    progress_callback(processed, total)
+                return batch_failed
 
-                log.progress(processed, total, "BM Details")
-                log.debug(f"  API: {api_time:.1f}s | DB: {db_time:.1f}s | errors: {errors}")
+            # Lần đầu
+            failed_ids = await run_fetch(bm_ids, concurrency)
 
-        log.info(f"Fetch details xong: {processed}/{total} (errors: {errors})")
+            # Retry failed IDs (tối đa 3 lần, giảm concurrency)
+            for retry_round in range(1, 4):
+                if not failed_ids:
+                    break
+                retry_concurrency = max(5, concurrency // (retry_round * 2))
+                log.warn(f"🔄 Retry lần {retry_round}: {len(failed_ids)} BM thất bại (concurrency={retry_concurrency})")
+                await asyncio.sleep(3 * retry_round)
+                all_processed -= len(failed_ids)  # Reset count cho retry
+                failed_ids = await run_fetch(failed_ids, retry_concurrency)
+
+            if failed_ids:
+                log.error(f"❌ {len(failed_ids)} BM vẫn thất bại sau retry: {failed_ids[:20]}...")
+
+        log.info(f"Fetch details xong: {all_processed}/{total} (failed: {len(failed_ids)})")
 
     # ─── Phân tích 4 nhóm ────────────────────────────────────
 
@@ -298,6 +325,7 @@ class BeastModeService:
                 "complexity_score": complexity,
                 "duplicate_hash": dup_hash,
                 "url": f"https://{self.api.auth.instance}/datacenter/beastmode?id={bm_id}",
+                "legacy_id": bm.get("legacy_id") or "",
             }
             results.append(result_row)
 
@@ -343,6 +371,34 @@ class BeastModeService:
             (group_number, limit, offset)
         )
 
+    def search_bm(self, query: str, limit: int = 50) -> list[dict]:
+        """Tìm BM theo tên (ILIKE) hoặc raw ID."""
+        query = query.strip()
+        if not query:
+            return []
+
+        # Nếu query là số → tìm theo ID
+        if query.isdigit():
+            return self.db.query(
+                """SELECT a.*, b.name as bm_name
+                   FROM bm_analysis a
+                   JOIN beastmodes b ON a.bm_id = b.id
+                   WHERE a.bm_id = %s
+                   LIMIT %s""",
+                (int(query), limit)
+            )
+
+        # Tìm theo tên (ILIKE)
+        return self.db.query(
+            """SELECT a.*, b.name as bm_name
+               FROM bm_analysis a
+               JOIN beastmodes b ON a.bm_id = b.id
+               WHERE b.name ILIKE %s
+               ORDER BY a.total_views DESC
+               LIMIT %s""",
+            (f"%{query}%", limit)
+        )
+
     def get_summary(self) -> dict:
         """Lấy tổng hợp kết quả phân tích."""
         groups = self.db.query(
@@ -361,6 +417,319 @@ class BeastModeService:
             "duplicates": duplicates[:20],
             "naming_issues_count": naming_issues,
             "top_dirty_datasets": dataset_stats[:10],
+        }
+
+    # ─── Xóa BM qua Card ──────────────────────────────────────
+
+    def get_bm_detail(self, bm_id: int) -> dict | None:
+        """Lấy chi tiết BM template, gồm links (cards) và dependencies."""
+        url = f"{self.DETAIL_URL}/{bm_id}?hidden=true"
+        resp = self.api.get(url)
+        if not resp or resp.status_code != 200:
+            log.error(f"Không thể lấy BM detail #{bm_id}")
+            return None
+        return resp.json()
+
+    def _parse_card_ids_from_links(self, links: list) -> list[str]:
+        """Trích card IDs từ links, format dr:CARD_ID:SUB_ID → lấy CARD_ID."""
+        card_ids = []
+        for link in links:
+            resource = link.get("resource", {})
+            if resource.get("type") == "CARD":
+                raw_id = resource.get("id", "")
+                if raw_id.startswith("dr:"):
+                    parts = raw_id.split(":")
+                    if len(parts) >= 2:
+                        card_ids.append(parts[1])
+                else:
+                    card_ids.append(raw_id)
+        return card_ids
+
+    def get_card_definition(self, card_id: str) -> dict | None:
+        """Lấy card KPI definition qua PUT."""
+        url = "/api/content/v3/cards/kpi/definition"
+        payload = {
+            "dynamicText": True,
+            "variables": True,
+            "urn": int(card_id),
+        }
+        resp = self.api.put(url, json=payload)
+        if not resp or resp.status_code != 200:
+            log.error(f"Không thể lấy card definition #{card_id}")
+            return None
+        return resp.json()
+
+    def remove_bm_from_card(self, card_id: str, bm_id: int, bm_name: str, bm_legacy_id: str) -> dict:
+        """
+        Gỡ BM ra khỏi card bằng cách sửa card definition và PUT lại.
+        - Lưu state cũ (card definition) vào DB trước khi xóa
+        - Lọc BM ra khỏi formulas (match bằng id == legacy_id)
+        - Chỉ tính thành công khi PUT trả về 200
+        """
+        log.info(f"Đang gỡ BM (legacy={bm_legacy_id}) khỏi card #{card_id}")
+
+        card_def = self.get_card_definition(card_id)
+        if not card_def:
+            return {"success": False, "error": f"Không lấy được card definition #{card_id}"}
+
+        definition = card_def.get("definition", card_def)
+
+        # ─── Lưu state cũ vào DB ─────────────────────────────
+        card_def_json = json.dumps(card_def, ensure_ascii=False)
+        self.db.execute(
+            """INSERT INTO bm_delete_log (bm_id, bm_name, bm_legacy_id, card_id, card_definition_json, status)
+               VALUES (%s, %s, %s, %s, %s, 'pending')""",
+            (bm_id, bm_name, bm_legacy_id, card_id, card_def_json)
+        )
+        log_row = self.db.query_one(
+            "SELECT id FROM bm_delete_log ORDER BY id DESC LIMIT 1"
+        )
+        log_id = log_row["id"] if log_row else None
+        log.info(f"  💾 Đã lưu card definition cũ (log #{log_id})")
+
+        # ─── Debug: dump card_def ra file ────────────────────
+        try:
+            with open("debug_card_def.json", "w", encoding="utf-8") as f:
+                json.dump(card_def, f, indent=2, ensure_ascii=False)
+            log.info(f"  📝 Đã lưu debug_card_def.json")
+        except Exception as e:
+            log.error(f"  ❌ Không thể lưu debug_card_def.json: {e}")
+
+        # ─── Lấy dataSourceId ─────────────────────────────────
+        # Thử lấy từ nhiều nguồn trong card definition response
+        data_source_id = None
+
+        # 1) Từ subscriptions (list format - card info API)
+        subscriptions = card_def.get("subscriptions", [])
+        if isinstance(subscriptions, list):
+            for sub in subscriptions:
+                if isinstance(sub, dict) and sub.get("dataSourceId"):
+                    data_source_id = sub["dataSourceId"]
+                    break
+        elif isinstance(subscriptions, dict):
+            # subscriptions là dict {name: {...}} trong definition
+            for sub_name, sub_data in subscriptions.items():
+                if isinstance(sub_data, dict):
+                    ds_id = sub_data.get("dataSourceId")
+                    if ds_id:
+                        data_source_id = ds_id
+                        break
+
+        # 2) Từ datasources array (card info API format)
+        if not data_source_id:
+            datasources = card_def.get("datasources", [])
+            if isinstance(datasources, list):
+                for ds in datasources:
+                    if isinstance(ds, dict) and ds.get("dataSourceId"):
+                        data_source_id = ds["dataSourceId"]
+                        break
+
+        # 3) Từ definition.conditionalFormats
+        if not data_source_id:
+            cond_formats = definition.get("conditionalFormats", [])
+            for cf in cond_formats:
+                cond = cf.get("condition", {})
+                if cond.get("dataSourceId"):
+                    data_source_id = cond["dataSourceId"]
+                    break
+
+        # 4) Fallback: gọi card info API (tham khảo 1901/get_card_info.py)
+        if not data_source_id:
+            log.info(f"  🔍 dataSourceId chưa tìm thấy, thử card info API...")
+            card_info_resp = self.api.get(
+                f"/api/content/v1/cards?urns={card_id}&parts=datasources&includeFiltered=true"
+            )
+            if card_info_resp and card_info_resp.status_code == 200:
+                try:
+                    card_info_data = card_info_resp.json()
+                    if isinstance(card_info_data, list) and len(card_info_data) > 0:
+                        card_info = card_info_data[0]
+                        # Lấy từ subscriptions
+                        for sub in card_info.get("subscriptions", []):
+                            if isinstance(sub, dict) and sub.get("dataSourceId"):
+                                data_source_id = sub["dataSourceId"]
+                                log.info(f"  ✅ Tìm thấy dataSourceId từ card info subscriptions")
+                                break
+                        # Lấy từ datasources
+                        if not data_source_id:
+                            for ds in card_info.get("datasources", []):
+                                if isinstance(ds, dict) and ds.get("dataSourceId"):
+                                    data_source_id = ds["dataSourceId"]
+                                    log.info(f"  ✅ Tìm thấy dataSourceId từ card info datasources")
+                                    break
+                except Exception as e:
+                    log.error(f"  ❌ Parse card info lỗi: {e}")
+
+        if not data_source_id:
+            if log_id:
+                self.db.execute(
+                    "UPDATE bm_delete_log SET status = 'failed', error_message = %s WHERE id = %s",
+                    ("Không tìm thấy dataSourceId", log_id)
+                )
+            return {"success": False, "error": f"Không tìm thấy dataSourceId cho card #{card_id}"}
+
+        log.info(f"  📦 dataSourceId={data_source_id}")
+
+        # ─── Lọc BM ra khỏi formulas ─────────────────────────
+        formulas = definition.get("formulas", [])
+        original_count = len(formulas)
+        filtered_formulas = [f for f in formulas if f.get("id") != bm_legacy_id]
+        removed_count = original_count - len(filtered_formulas)
+
+        if removed_count == 0:
+            if log_id:
+                self.db.execute(
+                    "UPDATE bm_delete_log SET status = 'skipped', error_message = %s WHERE id = %s",
+                    (f"BM không có trong formulas card #{card_id}", log_id)
+                )
+            return {"success": False, "error": f"Không tìm thấy BM (legacy={bm_legacy_id}) trong formulas card #{card_id}"}
+
+        log.info(f"  Đã lọc {removed_count} formula, còn {len(filtered_formulas)}/{original_count}")
+
+        # ─── Lọc BM ra khỏi subscription ────────────────────
+        # BM bị xóa khỏi formulas nhưng nếu vẫn còn trong subscription.columns/orderBy/groupBy
+        # → Domo sẽ 500 vì cố query formula không tồn tại
+        subscriptions = definition.get("subscriptions", {})
+        cleaned_subs = {}
+        for sub_name, sub_data in subscriptions.items():
+            if not isinstance(sub_data, dict):
+                cleaned_subs[sub_name] = sub_data
+                continue
+            cleaned_sub = dict(sub_data)
+            # Lọc columns
+            if "columns" in cleaned_sub:
+                original_cols = len(cleaned_sub["columns"])
+                cleaned_sub["columns"] = [
+                    c for c in cleaned_sub["columns"]
+                    if c.get("formulaId") != bm_legacy_id
+                ]
+                removed_cols = original_cols - len(cleaned_sub["columns"])
+                if removed_cols > 0:
+                    log.info(f"  🧹 Đã xóa {removed_cols} column ref trong subscription '{sub_name}'")
+            # Lọc orderBy
+            if "orderBy" in cleaned_sub:
+                cleaned_sub["orderBy"] = [
+                    o for o in cleaned_sub["orderBy"]
+                    if o.get("formulaId") != bm_legacy_id
+                ]
+            # Lọc groupBy
+            if "groupBy" in cleaned_sub:
+                cleaned_sub["groupBy"] = [
+                    g for g in cleaned_sub["groupBy"]
+                    if g.get("formulaId") != bm_legacy_id
+                ]
+            cleaned_subs[sub_name] = cleaned_sub
+
+        # ─── PUT lại card ─────────────────────────────────────
+        # Payload gồm: urn + dataProvider + formulas + subscription
+        # subscription phải là object trực tiếp (e.g. {"name":"main","columns":[...]})
+        # KHÔNG phải {"main": {...}}
+        main_sub = cleaned_subs.get("main", {})
+        if not main_sub and cleaned_subs:
+            # Lấy subscription đầu tiên nếu không có "main"
+            main_sub = next(iter(cleaned_subs.values()), {})
+        payload = {
+            "urn": int(card_id),
+            "dataProvider": {"dataSourceId": data_source_id},
+            "formulas": filtered_formulas,
+            "subscription": main_sub,
+        }
+
+        url = "/api/content/v3/cards/kpi/table/query"
+
+        # ─── Headers bắt buộc cho PUT card query ──────────────
+        session_toe = self.api.auth.cookies.get("SESSION_TOE", "")
+        extra_headers = {
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "ja",
+            "cache-control": "no-cache",
+            "content-type": "application/json;charset=UTF-8",
+            "pragma": "no-cache",
+            "origin": f"https://{self.api.auth.instance}",
+        }
+        if session_toe:
+            import json as _json
+            import random, string
+            suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+            extra_headers["x-domo-requestcontext"] = _json.dumps({"clientToe": f"{session_toe}-{suffix}"})
+
+        log.info(f"  🔍 [PUT] card_id={card_id}, dataSourceId={data_source_id}")
+        log.info(f"  🔍 [PUT] formulas: {original_count} → {len(filtered_formulas)}")
+        log.info(f"  🔍 [PUT] payload keys: {list(payload.keys())}")
+        log.info(f"  🔍 [PUT] SESSION_TOE={'✅' if session_toe else '❌ MISSING'}")
+
+        # ─── Debug: dump JSON ra file ──────────────────────────
+        try:
+            with open("debug_card_def.json", "w", encoding="utf-8") as f:
+                json.dump(card_def, f, indent=2, ensure_ascii=False)
+            with open("debug_put_payload.json", "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            log.info(f"  📝 Đã lưu debug_card_def.json + debug_put_payload.json")
+        except Exception as e:
+            log.error(f"  ❌ Không thể lưu debug JSON: {e}")
+
+        resp = self.api.put(url, json=payload, extra_headers=extra_headers)
+
+        if not resp or resp.status_code != 200:
+            status = resp.status_code if resp else "None"
+            body = resp.text[:500] if resp else ""
+            error_msg = f"PUT thất bại (status={status}): {body}"
+            log.error(f"  ❌ {error_msg}")
+            if log_id:
+                self.db.execute(
+                    "UPDATE bm_delete_log SET status = 'failed', error_message = %s WHERE id = %s",
+                    (error_msg[:500], log_id)
+                )
+            return {"success": False, "error": error_msg}
+
+        # ─── Thành công ───────────────────────────────────────
+        if log_id:
+            self.db.execute(
+                "UPDATE bm_delete_log SET status = 'success' WHERE id = %s",
+                (log_id,)
+            )
+        log.success(f"  ✅ Đã gỡ BM khỏi card #{card_id}")
+        return {"success": True, "removed": removed_count, "card_id": card_id}
+
+    def delete_bm(self, bm_id: int) -> dict:
+        """Orchestrate xóa BM: lấy detail → tìm cards → gỡ khỏi từng card."""
+        log.info(f"=== Bắt đầu xóa BM #{bm_id} ===")
+
+        # Lấy BM detail
+        detail = self.get_bm_detail(bm_id)
+        if not detail:
+            return {"success": False, "error": f"Không lấy được BM detail #{bm_id}"}
+
+        legacy_id = detail.get("legacyId", "")
+        bm_name = detail.get("name", "")
+        links = detail.get("links", [])
+
+        log.info(f"  BM: {bm_name} (legacy={legacy_id})")
+
+        # Tìm card IDs
+        card_ids = self._parse_card_ids_from_links(links)
+        if not card_ids:
+            return {"success": False, "error": f"BM #{bm_id} không có card nào liên kết"}
+
+        log.info(f"  Tìm thấy {len(card_ids)} cards: {card_ids}")
+
+        # Gỡ BM khỏi từng card
+        results = []
+        for card_id in card_ids:
+            result = self.remove_bm_from_card(card_id, bm_id, bm_name, legacy_id)
+            results.append(result)
+
+        success_count = sum(1 for r in results if r.get("success"))
+        log.info(f"=== Xóa BM #{bm_id} hoàn tất: {success_count}/{len(results)} cards ===")
+
+        return {
+            "success": success_count > 0,
+            "bm_id": bm_id,
+            "bm_name": bm_name,
+            "legacy_id": legacy_id,
+            "total_cards": len(card_ids),
+            "success_count": success_count,
+            "details": results,
         }
 
     # ─── Helpers ──────────────────────────────────────────────
