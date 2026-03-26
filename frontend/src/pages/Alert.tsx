@@ -61,7 +61,7 @@ export default function Alert() {
                 )}
                 {!data?.checked_at && (
                   <div className="text-xs text-slate-400">
-                    {lang === 'vi' ? 'Chưa kiểm tra. Hãy chạy Auto-Check trong Settings.' : '未確認。設定でAuto-Checkを実行してください。'}
+                    {lang === 'vi' ? 'Chưa có dữ liệu. Hãy cào Datasets hoặc Dataflows trước.' : '未確認。DataSetまたはDataFlowをクロールしてください。'}
                   </div>
                 )}
               </div>

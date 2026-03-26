@@ -687,6 +687,10 @@ def trigger_auto_check(req: AutoCheckRequest):
         _alert_data["all_ok"] = not has_issues
         _alert_data["failed_datasets"] = [dict(r) for r in all_failed_ds]
         _alert_data["failed_dataflows"] = all_failed_df
+        print(f"[AUTO-CHECK] _alert_data updated: checked_at={_alert_data['checked_at']}, "
+              f"all_ok={_alert_data['all_ok']}, "
+              f"ds_fail={len(_alert_data['failed_datasets'])}, "
+              f"df_fail={len(_alert_data['failed_dataflows'])}")
 
         result = {
             "checked_at": _alert_data["checked_at"],
@@ -800,6 +804,9 @@ def trigger_auto_check(req: AutoCheckRequest):
 @router.get("/alerts")
 def get_alerts():
     """Trả về danh sách datasets/dataflows có vấn đề."""
+    print(f"[GET /alerts] checked_at={_alert_data.get('checked_at')}, "
+          f"ds={len(_alert_data.get('failed_datasets', []))}, "
+          f"df={len(_alert_data.get('failed_dataflows', []))}")
     # Nếu in-memory trống, query DB trực tiếp
     if not _alert_data.get("checked_at"):
         try:
@@ -819,8 +826,11 @@ def get_alerts():
             _alert_data["failed_datasets"] = all_failed_ds
             _alert_data["failed_dataflows"] = all_failed_df
             db.close()
+            print(f"[GET /alerts] DB fallback: ds={len(all_failed_ds)}, df={len(all_failed_df)}")
         except Exception as e:
             print(f"[ALERTS] DB query error: {e}")
+            import traceback
+            traceback.print_exc()
     return _alert_data
 
 
