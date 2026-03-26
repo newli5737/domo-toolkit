@@ -514,47 +514,6 @@ def get_provider_types():
     return {"provider_types": [r["provider_type"] for r in rows]}
 
 
-@router.get("/alerts")
-def get_alerts(limit: int = Query(default=5, description="Số lần check gần nhất")):
-    """Lấy alerts từ các lần check gần nhất."""
-    db = _get_db()
-
-    checks = db.query(
-        """SELECT id, check_type, total_checked, failed_count, stale_count,
-                  ok_count, filters_json, details_json, checked_at
-           FROM monitor_checks
-           ORDER BY checked_at DESC
-           LIMIT %s""",
-        (limit * 2,),  # 2 records per check (dataset + dataflow)
-    )
-
-    db.close()
-
-    # Parse details_json
-    results = []
-    for check in checks:
-        details = []
-        if check.get("details_json"):
-            try:
-                details = json.loads(check["details_json"])
-            except Exception:
-                pass
-
-        results.append({
-            "id": check["id"],
-            "check_type": check["check_type"],
-            "total_checked": check["total_checked"],
-            "failed_count": check["failed_count"],
-            "stale_count": check["stale_count"],
-            "ok_count": check["ok_count"],
-            "filters": json.loads(check["filters_json"]) if check.get("filters_json") else {},
-            "alerts": [a for a in details if a.get("status") in ("failed", "stale", "no_update")],
-            "checked_at": check["checked_at"].isoformat() if check.get("checked_at") else None,
-        })
-
-    return {"checks": results}
-
-
 @router.get("/datasets/{dataset_id}/schedule")
 def get_dataset_schedule(dataset_id: str):
     """Lấy thông tin schedule của dataset qua Stream API.
