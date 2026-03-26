@@ -103,19 +103,53 @@ def get_card_types():
 
 
 @router.get("/dashboards")
-def get_dashboards():
-    """Lấy danh sách dashboard (pages) cho filter dropdown."""
+def get_dashboards(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    sort_by: str = Query(default="total_views", description="Sort: total_views, card_count, page_title"),
+    sort_order: str = Query(default="DESC"),
+    search: str = Query(default=""),
+):
+    """Lấy tất cả dashboards với phân trang và sort."""
     db = _get_db()
     try:
-        rows = db.query("""
+        where = "page_id IS NOT NULL AND page_title IS NOT NULL AND page_title != ''"
+        params: list = []
+        if search.strip():
+            where += " AND LOWER(page_title) LIKE %s"
+            params.append(f"%{search.strip().lower()}%")
+
+        allowed = {"total_views", "card_count", "page_title"}
+        if sort_by not in allowed:
+            sort_by = "total_views"
+        if sort_order.upper() not in ("ASC", "DESC"):
+            sort_order = "DESC"
+
+        count_sql = f"""
+            SELECT COUNT(DISTINCT page_id) as cnt FROM cards WHERE {where}
+        """
+        count_result = db.query(count_sql, tuple(params))
+        total = count_result[0]["cnt"] if count_result else 0
+
+        offset = (page - 1) * page_size
+        data_sql = f"""
             SELECT page_id, page_title, COUNT(*) as card_count,
                    COALESCE(SUM(view_count), 0) as total_views
             FROM cards
-            WHERE page_id IS NOT NULL AND page_title IS NOT NULL AND page_title != ''
+            WHERE {where}
             GROUP BY page_id, page_title
-            ORDER BY total_views DESC
-        """)
-        return [dict(r) for r in (rows or [])]
+            ORDER BY {sort_by} {sort_order} NULLS LAST
+            LIMIT %s OFFSET %s
+        """
+        rows = db.query(data_sql, tuple(params) + (page_size, offset))
+
+        return {
+            "data": [dict(r) for r in (rows or [])],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
+        }
     finally:
         db.close()
 
