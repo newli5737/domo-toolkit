@@ -28,8 +28,10 @@ interface GroupInfo {
 interface Summary {
   total: number
   groups: GroupInfo[]
-  duplicates: { duplicate_hash: string; cnt: number; bm_ids: number[] }[]
-  naming_issues_count: number
+  duplicates_exact: { dup_hash: string; cnt: number; bm_ids: number[] }[]
+  duplicates_normalized: { dup_hash: string; cnt: number; bm_ids: number[] }[]
+  duplicates_structure: { dup_hash: string; cnt: number; bm_ids: number[] }[]
+  duplicates_names: { name: string; cnt: number; bm_ids: number[] }[]
   top_dirty_datasets: { dataset_names: string; total: number; unused: number; cleanup_candidates: number }[]
 }
 
@@ -537,15 +539,22 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-purple)]/15 flex items-center justify-center text-lg">📋</div>
               <div>
-                <p className="text-xs text-gray-500">{lang === 'ja' ? '重複BM' : 'BM trùng lặp'}</p>
-                <p className="text-xl font-bold text-[var(--color-accent-purple)]">{summary.duplicates.length}</p>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? '重複BM (完全一致)' : 'Trùng expression'}</p>
+                <p className="text-xl font-bold text-[var(--color-accent-purple)]">{(summary.duplicates_exact || []).length}</p>
               </div>
             </div>
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-yellow)]/15 flex items-center justify-center text-lg">⚠️</div>
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-yellow)]/15 flex items-center justify-center text-lg">🔄</div>
               <div>
-                <p className="text-xs text-gray-500">{lang === 'ja' ? '命名問題' : 'Tên có vấn đề'}</p>
-                <p className="text-xl font-bold text-[var(--color-accent-yellow)]">{summary.naming_issues_count}</p>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? '構造重複' : 'Trùng cấu trúc'}</p>
+                <p className="text-xl font-bold text-[var(--color-accent-yellow)]">{(summary.duplicates_structure || []).length}</p>
+              </div>
+            </div>
+            <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-blue)]/15 flex items-center justify-center text-lg">📛</div>
+              <div>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? '同名BM' : 'Trùng tên'}</p>
+                <p className="text-xl font-bold text-[var(--color-accent-blue)]">{(summary.duplicates_names || []).length}</p>
               </div>
             </div>
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
