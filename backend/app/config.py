@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     gmail_app_password: str = ""
     alert_email_to: str = ""
 
+    # CORS
+    cors_origins: str = ""
+
     @property
     def db_url(self) -> str:
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"

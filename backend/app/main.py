@@ -18,15 +18,19 @@ app = FastAPI(
     version="0.2.0",
 )
 
-# CORS cho frontend dev server
+# CORS cho frontend (đọc từ .env hoặc mặc định localhost)
+settings = get_settings()
+cors_origins = [
+    o.strip() for o in settings.cors_origins.split(",") if o.strip()
+] if settings.cors_origins else [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:3000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175",
-        "http://localhost:3000"
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
