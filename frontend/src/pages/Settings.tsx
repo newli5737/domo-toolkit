@@ -9,6 +9,7 @@ interface AutoCheckConfig {
   has_backlog_cookie: boolean
   alert_email_to: string
   min_card_count: number
+  provider_type: string
   has_gmail: boolean
   schedule_enabled: boolean
   schedule_hour: number
@@ -31,6 +32,7 @@ export default function Settings() {
 
   const [config, setConfig] = useState<AutoCheckConfig | null>(null)
   const [minCards, setMinCards] = useState(40)
+  const [providerType, setProviderType] = useState('mysql-ssh')
   const [alertEmail, setAlertEmail] = useState('')
   const [commentOk, setCommentOk] = useState(
     '【1次データ取得エラー確認結果】\nエラーがなかった旨\n\n【メインDataSetエラー確認結果】\nエラーがなかった旨'
@@ -50,6 +52,7 @@ export default function Settings() {
         setConfig(d)
         if (d.alert_email_to) setAlertEmail(d.alert_email_to)
         if (d.min_card_count) setMinCards(d.min_card_count)
+        if (d.provider_type) setProviderType(d.provider_type)
         setScheduleEnabled(d.schedule_enabled ?? false)
         setScheduleHour(d.schedule_hour ?? 8)
         setScheduleMinute(d.schedule_minute ?? 0)
@@ -65,6 +68,7 @@ export default function Settings() {
       await apiPost('/api/monitor/save-alert-config', {
         alert_email: alertEmail,
         min_card_count: minCards,
+        provider_type: providerType,
         schedule_enabled: scheduleEnabled,
         schedule_hour: scheduleHour,
         schedule_minute: scheduleMinute,
@@ -82,6 +86,7 @@ export default function Settings() {
     try {
       const res = await apiPost<any>('/api/monitor/auto-check', {
         min_card_count: minCards,
+        provider_type: providerType,
         comment_ok: commentOk,
         alert_email: alertEmail,
       })
@@ -140,7 +145,15 @@ export default function Settings() {
           <div className="card-header">{lang === 'vi' ? 'Cấu hình Auto-Check' : 'Auto-Check設定'}</div>
           <div className="card-body space-y-4">
             {/* Card threshold + Alert email */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                  {lang === 'vi' ? 'Import Type (điều kiện lọc)' : 'Import Type（フィルター条件）'}
+                </label>
+                <input type="text" value={providerType} onChange={e => setProviderType(e.target.value)}
+                  placeholder="mysql-ssh"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
                   {lang === 'vi' ? 'Card tối thiểu (メインDataSet)' : 'メインDataSetの最小カード数'}
@@ -158,6 +171,11 @@ export default function Settings() {
                 <p className="text-[10px] text-slate-400 mt-1">{lang === 'vi' ? 'Nhiều email cách nhau bằng dấu phẩy' : '複数のメールはカンマで区切り'}</p>
               </div>
             </div>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {lang === 'vi'
+                ? 'ℹ️ Auto-check sẽ lọc dataset theo Import Type VÀ Card ≥ giá trị trên. Nếu tất cả OK → đăng Backlog. Nếu dataflow lỗi → gửi email.'
+                : 'ℹ️ Auto-checkはImport TypeかつCard≥上記値でDataSetをフィルター。全てOK→Backlog投稿。DataFlowエラー→メール送信。'}
+            </p>
 
             {/* ─── Schedule Config ─── */}
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4">

@@ -24,6 +24,7 @@ def _run_auto_check():
         req = AutoCheckRequest(
             alert_email=config.get("alert_email", ""),
             min_card_count=config.get("min_card_count", 40),
+            provider_type=config.get("provider_type", "mysql-ssh"),
         )
         result = trigger_auto_check(req)
         print(f"[SCHEDULER] ✅ Auto-check done: {result}")

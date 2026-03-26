@@ -42,7 +42,7 @@ def _load_alert_config() -> dict:
         db = _get_db()
         rows = db.query("SELECT key, value FROM app_settings WHERE key LIKE 'alert_%' OR key LIKE 'schedule_%'")
         db.close()
-        config = {"alert_email": "", "min_card_count": 40,
+        config = {"alert_email": "", "min_card_count": 40, "provider_type": "mysql-ssh",
                   "schedule_enabled": False, "schedule_hour": 8, "schedule_minute": 0,
                   "schedule_days": "mon,tue,wed,thu,fri"}
         for row in (rows or []):
@@ -51,6 +51,8 @@ def _load_alert_config() -> dict:
                 config["alert_email"] = v
             elif k == "alert_min_card_count":
                 config["min_card_count"] = int(v)
+            elif k == "alert_provider_type":
+                config["provider_type"] = v
             elif k == "schedule_enabled":
                 config["schedule_enabled"] = v.lower() == "true"
             elif k == "schedule_hour":
@@ -62,7 +64,7 @@ def _load_alert_config() -> dict:
         return config
     except Exception as e:
         print(f"[ALERT-CONFIG] Load from DB error: {e}")
-        return {"alert_email": "", "min_card_count": 40,
+        return {"alert_email": "", "min_card_count": 40, "provider_type": "mysql-ssh",
                 "schedule_enabled": False, "schedule_hour": 8, "schedule_minute": 0,
                 "schedule_days": "mon,tue,wed,thu,fri"}
 
@@ -73,6 +75,7 @@ def _save_alert_config(config: dict):
         mappings = {
             "alert_email": str(config.get("alert_email", "")),
             "alert_min_card_count": str(config.get("min_card_count", 40)),
+            "alert_provider_type": str(config.get("provider_type", "mysql-ssh")),
             "schedule_enabled": str(config.get("schedule_enabled", False)).lower(),
             "schedule_hour": str(config.get("schedule_hour", 8)),
             "schedule_minute": str(config.get("schedule_minute", 0)),
@@ -623,6 +626,7 @@ def get_dataflow_executions(
 class AutoCheckRequest(BaseModel):
     """Cấu hình auto-check từ FE."""
     min_card_count: int = 40
+    provider_type: str = "mysql-ssh"
     comment_ok: str = "【1次データ取得エラー確認結果】\nエラーがなかった旨\n\n【メインDataSetエラー確認結果】\nエラーがなかった旨"
     alert_email: str = ""
     schedule_enabled: bool = False
@@ -633,47 +637,39 @@ class AutoCheckRequest(BaseModel):
 
 @router.post("/auto-check")
 def trigger_auto_check(req: AutoCheckRequest):
-    """Kiểm tra datasets trong DB → post Backlog nếu OK, gửi email nếu có lỗi."""
+    """Kiểm tra datasets trong DB → post Backlog nếu OK, gửi email nếu có lỗi.
+    
+    Dataset check: provider_type AND card_count >= N
+    Dataflow check: tất cả dataflows
+    """
     # Lưu config từ FE vào module-level để _post_crawl_alert dùng
     if req.alert_email:
         _alert_config["alert_email"] = req.alert_email
     _alert_config["min_card_count"] = req.min_card_count
+    _alert_config["provider_type"] = req.provider_type
 
     settings = get_settings()
     db = _get_db()
 
     try:
         # ── 1. Query datasets đã crawl ──
-        # 1a. mysql-ssh datasets bị FAILED
-        failed_ssh = db.query(
-            "SELECT id, name, provider_type, last_execution_state, card_count "
-            "FROM datasets WHERE LOWER(provider_type) = 'mysql-ssh' "
-            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
-        )
+        # Datasets: provider_type AND card_count >= N bị FAILED
+        all_failed_ds = []
+        if req.provider_type.strip():
+            failed_ds = db.query(
+                "SELECT id, name, provider_type, last_execution_state, card_count "
+                "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) "
+                "AND card_count >= %s "
+                "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%'",
+                (req.provider_type.strip(), req.min_card_count)
+            )
+            all_failed_ds = [dict(r) for r in (failed_ds or [])]
 
-        # 1b. Datasets có card_count >= N bị FAILED
-        failed_main = db.query(
-            "SELECT id, name, provider_type, last_execution_state, card_count "
-            "FROM datasets WHERE card_count >= %s "
-            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%'",
-            (req.min_card_count,)
-        )
-
-        # 1c. Dataflows bị FAILED
+        # Dataflows bị FAILED
         failed_df = db.query(
             "SELECT id, name, last_execution_state "
             "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
         )
-
-        # Deduplicate
-        seen = set()
-        all_failed_ds = []
-        for row in (failed_ssh or []) + (failed_main or []):
-            ds_id = str(row.get("id", ""))
-            if ds_id not in seen:
-                seen.add(ds_id)
-                all_failed_ds.append(row)
-
         all_failed_df = [dict(r) for r in (failed_df or [])]
 
         has_issues = len(all_failed_ds) > 0 or len(all_failed_df) > 0
@@ -837,6 +833,7 @@ def save_alert_config_endpoint(req: AutoCheckRequest):
     """Lưu cấu hình alert email + schedule vào DB."""
     _alert_config["alert_email"] = req.alert_email
     _alert_config["min_card_count"] = req.min_card_count
+    _alert_config["provider_type"] = req.provider_type
     _alert_config["schedule_enabled"] = req.schedule_enabled
     _alert_config["schedule_hour"] = req.schedule_hour
     _alert_config["schedule_minute"] = req.schedule_minute
@@ -870,6 +867,7 @@ def get_auto_check_config():
         "has_backlog_cookie": has_cookie,
         "alert_email_to": _alert_config.get("alert_email", ""),
         "min_card_count": _alert_config.get("min_card_count", 40),
+        "provider_type": _alert_config.get("provider_type", "mysql-ssh"),
         "has_gmail": bool(settings.gmail_email and settings.gmail_app_password),
         "schedule_enabled": _alert_config.get("schedule_enabled", False),
         "schedule_hour": _alert_config.get("schedule_hour", 8),
