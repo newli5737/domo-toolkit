@@ -312,7 +312,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
             {summary && (
               <>
                 <button
-                  onClick={() => apiDownload('/api/beastmode/export/csv')}
+                  onClick={() => apiDownload(`/api/beastmode/export/csv?lang=${lang}`)}
                   className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
                 >
                   ⬇ Export CSV

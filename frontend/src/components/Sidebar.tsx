@@ -12,6 +12,7 @@ import {
   ChevronsRight,
   AlertTriangle,
   BookOpen,
+  BarChart3,
 } from 'lucide-react'
 import { useI18n } from '../i18n'
 
@@ -37,6 +38,7 @@ export default function Sidebar({ loggedIn, username, collapsed, onToggle }: Sid
       items: [
         { path: '/', label: t('nav.dashboard'), icon: LayoutDashboard },
         { path: '/beastmode', label: lang === 'vi' ? 'Giám sát Beast Mode' : 'Beast Mode監視', icon: Zap },
+        { path: '/cards', label: lang === 'vi' ? 'Card & Dashboard' : 'カード＆ダッシュボード', icon: BarChart3 },
         { path: '/monitor', label: lang === 'vi' ? 'Giám sát DataSet' : 'DataSet監視', icon: Activity },
         { path: '/alert', label: lang === 'vi' ? 'Cảnh báo' : 'アラート', icon: AlertTriangle },
       ]

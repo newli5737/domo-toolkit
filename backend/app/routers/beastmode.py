@@ -698,7 +698,7 @@ async def get_group(group_number: int, limit: int = 100, offset: int = 0):
 
 
 @router.get("/export/csv")
-async def export_csv():
+async def export_csv(lang: str = "vi"):
     """Tải file CSV kết quả phân tích. KHÔNG CẦN LOGIN."""
     db = get_db()
     try:
@@ -711,11 +711,41 @@ async def export_csv():
         if not rows:
             raise HTTPException(status_code=404, detail="Chưa có dữ liệu phân tích")
 
+        # Header mapping for Japanese
+        header_map_ja = {
+            "bm_id": "BM ID",
+            "bm_name": "BM名",
+            "legacy_id": "Legacy ID",
+            "group_number": "グループ番号",
+            "group_label": "グループラベル",
+            "active_cards_count": "使用カード数",
+            "total_views": "合計閲覧数",
+            "referenced_by_count": "参照数",
+            "dataset_names": "データセット名",
+            "complexity_score": "複雑度スコア",
+            "duplicate_hash": "重複ハッシュ",
+            "normalized_hash": "正規化ハッシュ",
+            "structure_hash": "構造ハッシュ",
+            "url": "URL",
+        }
+
+        original_keys = list(rows[0].keys())
+
+        if lang == "ja":
+            mapped_keys = [header_map_ja.get(k, k) for k in original_keys]
+            mapped_rows = [
+                {header_map_ja.get(k, k): v for k, v in row.items()}
+                for row in rows
+            ]
+        else:
+            mapped_keys = original_keys
+            mapped_rows = rows
+
         # Tạo CSV in-memory
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(output, fieldnames=mapped_keys)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(mapped_rows)
 
         output.seek(0)
         csv_bytes = output.getvalue().encode("utf-8-sig")

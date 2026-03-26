@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.core.db import DomoDatabase
-from app.routers import auth, beastmode, monitor, backlog
+from app.routers import auth, beastmode, monitor, backlog, card
 
 app = FastAPI(
     title="DOMO Toolkit",
@@ -41,6 +41,7 @@ app.include_router(auth.router)
 app.include_router(beastmode.router)
 app.include_router(monitor.router)
 app.include_router(backlog.router)
+app.include_router(card.router)
 
 
 @app.on_event("startup")
