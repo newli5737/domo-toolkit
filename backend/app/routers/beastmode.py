@@ -383,75 +383,45 @@ def _run_full_crawl(job_id: int):
 
 
 def _run_view_and_analyze(job_id: int):
-    """Background task: chỉ chạy step 4 (view counts) + step 5 (analyze)."""
-    auth = require_auth()
+    """Background task: chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API)."""
     db = get_db()
-    api = DomoAPI(auth)
+    # Dùng dummy auth vì chỉ cần DB, không gọi API
+    from app.core.auth import DomoAuth
+    dummy_auth = DomoAuth("astecpaints-co-jp.domo.com")
+    api = DomoAPI(dummy_auth)
     bm_service = BeastModeService(api, db)
-    card_service = CardService(api, db)
 
-    partial_steps = 2  # chỉ 2 step
-    step_times = {}
     crawl_start = time.time()
 
     log.info("=" * 60)
-    log.info(f"🔄 CHẠY LẠI VIEW COUNTS + PHÂN TÍCH (Job #{job_id})")
+    log.info(f"🔄 PHÂN TÍCH LẠI TỪ DB (Job #{job_id})")
     log.info("=" * 60)
 
     try:
         db.execute(
             """UPDATE crawl_jobs SET status = 'running', started_at = %s,
-               total_steps = %s WHERE id = %s""",
-            (datetime.now(), partial_steps, job_id)
+               total_steps = 1 WHERE id = %s""",
+            (datetime.now(), job_id)
         )
 
-        # ─── Step 1/2: Fetch View Counts ─────────────────────
-        step = 1
-        step_start = time.time()
-        urns = card_service.get_all_urns()
-        log.step(step, partial_steps, f"👁️ Fetch View Counts ({len(urns)} cards)")
-        _update_step(db, job_id, step, "Fetch View Counts",
-                     f"[{step}/{partial_steps}] Đang lấy view counts...",
-                     0, len(urns))
-
-        card_service.fetch_view_counts(
-            urns,
-            job_id=job_id,
-            progress_callback=lambda p, t: _update_step_progress(db, job_id, p, t)
-        )
-
-        step_times[step] = time.time() - step_start
-        log.success(f"  ✅ View counts hoàn tất: {len(urns)} cards ({step_times[step]:.1f}s)")
-
-        # ─── Step 2/2: Phân tích ─────────────────────────────
-        step = 2
-        step_start = time.time()
-        log.step(step, partial_steps, "📊 Phân tích & phân loại")
-        _update_step(db, job_id, step, "Phân tích & phân loại",
-                     f"[{step}/{partial_steps}] Đang phân tích...", 0, 1)
+        _update_step(db, job_id, 1, "Phân tích & phân loại",
+                     "[1/1] Đang phân tích từ DB...", 0, 1)
 
         summary = bm_service.analyze()
         _update_step_progress(db, job_id, 1, 1)
 
-        step_times[step] = time.time() - step_start
-        log.success(f"  ✅ Phân tích hoàn tất ({step_times[step]:.1f}s)")
-
-        # ─── Done ─────────────────────────────────────────
         total_time = time.time() - crawl_start
         log.info("=" * 60)
-        log.success(f"🎉 HOÀN TẤT! Tổng: {summary['total']} BM")
-        log.info(f"⏱️  Tổng thời gian: {total_time:.1f}s")
-        for s, t in step_times.items():
-            log.info(f"   Step {s}: {t:.1f}s")
+        log.success(f"🎉 HOÀN TẤT! Tổng: {summary['total']} BM ({total_time:.1f}s)")
         log.info("=" * 60)
 
         db.execute(
             """UPDATE crawl_jobs SET status = 'done', finished_at = %s,
-               message = %s, found = %s, current_step = %s,
+               message = %s, found = %s, current_step = 1,
                step_name = 'Hoàn tất', step_processed = 1, step_total = 1
                WHERE id = %s""",
             (datetime.now(), f"Hoàn tất: {summary['total']} BM",
-             summary["total"], partial_steps, job_id)
+             summary["total"], job_id)
         )
 
     except Exception as e:
@@ -591,8 +561,7 @@ async def start_crawl(background_tasks: BackgroundTasks):
 
 @router.post("/crawl/reanalyze")
 async def start_reanalyze(background_tasks: BackgroundTasks):
-    """Chỉ chạy lại View Counts + Phân tích. CẦN LOGIN."""
-    require_auth()
+    """Chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API). KHÔNG CẦN LOGIN."""
     db = get_db()
 
     db.execute(
