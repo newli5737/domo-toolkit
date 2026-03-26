@@ -1,0 +1,18 @@
+{
+  "apps": [
+    {
+      "name": "domo-backend",
+      "script": "/root/domo-toolkit/backend/.venv/bin/uvicorn",
+      "args": "app.main:app --host 0.0.0.0 --port 8000",
+      "cwd": "/root/domo-toolkit/backend",
+      "interpreter": "none",
+      "env": {
+        "PATH": "/root/domo-toolkit/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+      },
+      "max_restarts": 10,
+      "restart_delay": 3000,
+      "watch": false,
+      "log_date_format": "YYYY-MM-DD HH:mm:ss"
+    }
+  ]
+}
