@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://domo.vanquyenhair.name.vn/api/:path*"
+    },
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
     }
   ]
 }
