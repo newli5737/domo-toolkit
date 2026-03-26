@@ -4,15 +4,7 @@
 Domo Toolkit giúp bạn:
 - **Kiểm tra** Dataset và Dataflow trên Domo có đang chạy bình thường không
 - **Nhận cảnh báo email** khi có lỗi xảy ra
-- **Dọn dẹp Beast Mode** dư thừa, không cần dùng
-
----
-
-## 📊 Trang Dashboard (`/`)
-
-Đây là trang chủ, hiển thị tổng quan:
-- Tổng số Beast Mode, Dataset, Dataflow đang có
-- **Quick Actions**: bấm vào để chuyển nhanh đến các chức năng
+- **Tự động kiểm tra theo lịch** (ví dụ: 8h sáng T2-T6)
 
 ---
 
@@ -26,40 +18,22 @@ Domo Toolkit giúp bạn:
 3. Dùng bộ lọc phía trên bảng để tìm nhanh (theo loại, trạng thái, số card...)
 4. Bấm icon 🔗 bên phải mỗi dòng → **mở trực tiếp trên Domo** để kiểm tra chi tiết
 
----
-
-## 🐉 Trang Beast Mode (`/beastmode`)
-
-**Mục đích**: Tìm Beast Mode dư thừa để dọn dẹp, giảm tải hệ thống.
-
-### Cách dùng:
-1. Bấm **Crawl** → quét toàn bộ Beast Mode (chờ vài phút, xem tiến trình realtime)
-2. Khi xong, xem bảng kết quả chia thành **4 nhóm**:
-
-| Nhóm | Màu | Ý nghĩa |
-|------|-----|---------|
-| Nhóm 1 | 🔴 | Không được dùng → **nên xóa** |
-| Nhóm 2 | 🟡 | Có người xem nhưng không dùng |
-| Nhóm 3 | 🟠 | Được dùng ít |
-| Nhóm 4 | 🟢 | Đang dùng bình thường |
-
-3. Kéo xuống xem **Dataset cần dọn dẹp nhất** — bấm ID để mở trên Domo
-4. Bấm **Re-analyze** nếu muốn tính toán lại mà không cào dữ liệu mới
+### Ý nghĩa trạng thái:
+| Trạng thái | Ý nghĩa |
+|------------|---------|
+| ✅ OK | Đang chạy bình thường |
+| ⚠️ Stale | Không cập nhật quá lâu |
+| ❌ Failed | Lần chạy gần nhất bị lỗi |
 
 ---
 
 ## 🚨 Trang Alert (`/alert`)
 
-**Mục đích**: Xem nhanh danh sách Dataset/Dataflow đang **bị lỗi**.
-
-- Bấm icon 🔗 → mở trực tiếp trên Domo để kiểm tra
-- Bấm 🔄 để refresh dữ liệu mới nhất
+Xem nhanh danh sách Dataset/Dataflow đang **bị lỗi**. Bấm icon 🔗 → mở trên Domo, bấm 🔄 để refresh.
 
 ---
 
 ## ⚙️ Trang Settings (`/settings`)
-
-**Mục đích**: Cài đặt email cảnh báo và lịch kiểm tra tự động.
 
 ### Email cảnh báo
 - Nhập email nhận cảnh báo (nhiều email cách nhau bằng dấu phẩy)
