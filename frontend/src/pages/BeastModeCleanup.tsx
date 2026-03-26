@@ -85,8 +85,6 @@ const BADGE_BG: Record<string, string> = {
 }
 
 const STEP_ICONS = ['🔍', '📋', '🃏', '👁️', '📊']
-const STEP_LABELS_VI = ['Crawl BM', 'BM Details', 'Crawl Cards', 'View Counts', 'Phân tích']
-const STEP_LABELS_JA = ['BM取得', 'BM詳細', 'カード取得', '閲覧数', '分析']
 
 function formatTime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -110,7 +108,6 @@ interface Props {
 export default function BeastModeCleanup({ readOnly = false }: Props) {
   const { lang } = useI18n()
   const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
-  const _STEP_LABELS = lang === 'ja' ? STEP_LABELS_JA : STEP_LABELS_VI
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [activeTab, setActiveTab] = useState(1)

@@ -205,15 +205,6 @@ export default function Monitor() {
     } catch { return String(s) }
   }
 
-  const _getScheduleBadge = (state: string) => {
-    if (!state) return <span className="badge badge-gray">-</span>
-    switch (state.toUpperCase()) {
-      case 'ACTIVE': return <span className="badge badge-success"><CheckCircle className="w-3 h-3" /> {lang === 'vi' ? 'Hoạt động' : 'アクティブ'}</span>
-      case 'INACTIVE': return <span className="badge badge-gray"><Clock className="w-3 h-3" /> {lang === 'vi' ? 'Không hoạt động' : '非アクティブ'}</span>
-      default: return <span className="badge badge-info">{state}</span>
-    }
-  }
-
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: t('monitor.tab.overview') },
     { key: 'datasets', label: `${t('monitor.tab.datasets')} (${dsTotal})` },
