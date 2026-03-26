@@ -33,6 +33,12 @@ _alert_data = {
     "failed_dataflows": [],  # [{id, name, last_execution_state}]
 }
 
+# Alert config — set by FE Settings page, NOT from .env
+_alert_config = {
+    "alert_email": "",       # email nhận alert, cấu hình từ UI
+    "min_card_count": 40,
+}
+
 
 def _get_db() -> DomoDatabase:
     settings = get_settings()
@@ -80,8 +86,8 @@ def _post_crawl_alert(db: DomoDatabase):
     _alert_data["failed_dataflows"] = all_failed_df
 
     if not _alert_data["all_ok"]:
-        # Gửi email alert
-        to_email = settings.alert_email_to
+        # Gửi email alert — lấy email từ FE config, không phải .env
+        to_email = _alert_config.get("alert_email", "")
         if settings.gmail_email and settings.gmail_app_password and to_email:
             subject = "【Domo監視】データエラー検出"
             body_lines = ["Domoデータ監視でエラーが検出されました。\n"]
@@ -614,6 +620,11 @@ class AutoCheckRequest(BaseModel):
 @router.post("/auto-check")
 def trigger_auto_check(req: AutoCheckRequest):
     """Kiểm tra datasets trong DB → post Backlog nếu OK, gửi email nếu có lỗi."""
+    # Lưu config từ FE vào module-level để _post_crawl_alert dùng
+    if req.alert_email:
+        _alert_config["alert_email"] = req.alert_email
+    _alert_config["min_card_count"] = req.min_card_count
+
     settings = get_settings()
     db = _get_db()
 
@@ -630,7 +641,7 @@ def trigger_auto_check(req: AutoCheckRequest):
         failed_main = db.query(
             "SELECT id, name, provider_type, last_execution_state, card_count "
             "FROM datasets WHERE card_count >= %s "
-            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'",
+            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%'",
             (req.min_card_count,)
         )
 
