@@ -67,7 +67,12 @@ export default function Monitor() {
   const [progress, setProgress] = useState<{ step: string; processed: number; total: number; percent: number } | null>(null)
 
   // DOMO instance for links
-  const DOMO_BASE = 'https://astecpaints-co-jp.domo.com'
+  const [domoBase, setDomoBase] = useState('')
+  useEffect(() => {
+    apiGet<{ domo_url?: string }>('/api/auth/status')
+      .then(d => { if (d.domo_url) setDomoBase(d.domo_url) })
+      .catch(() => {})
+  }, [])
 
   // Filters
   const [staleHours, setStaleHours] = useState(24)
@@ -482,7 +487,7 @@ export default function Monitor() {
                         {ds.updated_at && <div className="text-slate-400 text-xs mt-0.5" title={lang === 'vi' ? 'Thời gian cào' : 'クロール時刻'}>⟳ {fmtTimeShort(ds.updated_at)}</div>}
                       </td>
                       <td>
-                        <a href={`${DOMO_BASE}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${domoBase}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
                           className="text-slate-400 hover:text-blue-500 transition-colors" title="Open in Domo">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
@@ -534,7 +539,7 @@ export default function Monitor() {
                       <td>{df.execution_count || '-'}</td>
                       <td className="text-slate-500 text-sm truncate max-w-[150px]">{df.owner || '-'}</td>
                       <td>
-                        <a href={`${DOMO_BASE}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${domoBase}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
                           className="text-slate-400 hover:text-purple-500 transition-colors" title="Open in Domo">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>

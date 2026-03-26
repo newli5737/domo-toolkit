@@ -57,16 +57,6 @@ class MonitorService:
 
             resp = self.api.post(self.DATASOURCES_SEARCH_URL, json=payload)
 
-            # Debug log đầu tiên
-            if offset == 0:
-                print(f"[DEBUG CRAWL] URL: {self.api.base_url}{self.DATASOURCES_SEARCH_URL}")
-                print(f"[DEBUG CRAWL] Payload entities: {payload['entities']}")
-                if resp:
-                    print(f"[DEBUG CRAWL] Status: {resp.status_code}")
-                    print(f"[DEBUG CRAWL] Response keys: {list(resp.json().keys()) if resp.status_code == 200 else resp.text[:300]}")
-                else:
-                    print(f"[DEBUG CRAWL] Response is None!")
-
             if not resp or resp.status_code != 200:
                 log.error(f"Search datasets thất bại tại offset={offset}")
                 break
@@ -84,13 +74,6 @@ class MonitorService:
 
             # Parse fields từ response
             for i, ds in enumerate(datasets):
-                # Debug: print first item keys to see available fields
-                if offset == 0 and i == 0:
-                    print(f"[DEBUG CRAWL] Sample dataset keys: {list(ds.keys())}")
-                    print(f"[DEBUG CRAWL] Sample scheduleActive: {ds.get('scheduleActive')}")
-                    print(f"[DEBUG CRAWL] Sample streamId: {ds.get('streamId')}")
-                    print(f"[DEBUG CRAWL] Sample displayType: {ds.get('displayType')}")
-
                 card_info = ds.get("cardInfo", {})
 
                 # Determine schedule state
@@ -130,7 +113,9 @@ class MonitorService:
         return all_datasets
 
     def fetch_dataset_detail(self, dataset_id: str) -> dict | None:
-        """Lấy chi tiết 1 dataset: lastUpdated, cardCount, provider, schedule."""
+        """Lấy chi tiết 1 dataset qua /api/data/v3/datasources/{id}.
+        Trả về đầy đủ fields cho cả health check lẫn schedule viewer.
+        """
         url = self.DATASOURCE_DETAIL_URL.format(dataset_id)
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:
@@ -149,6 +134,8 @@ class MonitorService:
                 if isinstance(data.get("dataProvider"), dict) else ""
             ),
             "stream_id": data.get("streamId", ""),
+            "schedule_active": data.get("scheduleActive"),
+            "status": data.get("status"),
             "last_updated": data.get("lastUpdated"),
         }
 
@@ -186,21 +173,6 @@ class MonitorService:
             log.info(f"Lưu {len(rows)} datasets vào DB")
 
     # ─── Schedule / Execution History ─────────────────────────
-
-    def fetch_dataset_detail(self, dataset_id: str) -> dict | None:
-        """Lấy chi tiết dataset qua /api/data/v3/datasources/{id}.
-        Trả về dict chứa stream_id để dùng cho fetch_dataset_schedule.
-        """
-        url = self.DATASOURCE_DETAIL_URL.format(dataset_id)
-        resp = self.api.get(url)
-        if not resp or resp.status_code != 200:
-            return None
-        data = resp.json()
-        return {
-            "stream_id": data.get("streamId", ""),
-            "schedule_active": data.get("scheduleActive"),
-            "status": data.get("status"),
-        }
 
     def fetch_dataset_schedule(self, stream_id: int | str) -> dict | None:
         """Lấy thông tin schedule của dataset qua Stream API.

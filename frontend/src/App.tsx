@@ -8,6 +8,7 @@ import BeastModeCleanup from './pages/BeastModeCleanup'
 import Monitor from './pages/Monitor'
 import Alert from './pages/Alert'
 import Settings from './pages/Settings'
+import Guide from './pages/Guide'
 import Login from './pages/Login'
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
                 loggedIn ? <Monitor /> : <Login onLoginSuccess={handleLogin} />
               } />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/guide" element={<Guide />} />
               <Route path="/alert" element={<Alert />} />
               <Route path="/login" element={<Login onLoginSuccess={handleLogin} />} />
             </Routes>

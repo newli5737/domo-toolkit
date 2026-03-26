@@ -11,6 +11,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react'
 import { useI18n } from '../i18n'
 
@@ -44,6 +45,7 @@ export default function Sidebar({ loggedIn, username, collapsed, onToggle }: Sid
       section: t('nav.system'),
       items: [
         { path: '/settings', label: t('nav.settings'), icon: Settings },
+        { path: '/guide', label: lang === 'vi' ? 'Hướng dẫn' : 'ガイド', icon: BookOpen },
       ]
     }
   ]

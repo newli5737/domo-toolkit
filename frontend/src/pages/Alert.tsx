@@ -3,8 +3,6 @@ import { AlertTriangle, ExternalLink, RefreshCw, CheckCircle, Database, Workflow
 import { apiGet } from '../api'
 import { useI18n } from '../i18n'
 
-const DOMO_BASE = 'https://astecpaints-co-jp.domo.com'
-
 interface AlertData {
   checked_at: string | null
   all_ok: boolean
@@ -16,6 +14,13 @@ export default function Alert() {
   const { lang } = useI18n()
   const [data, setData] = useState<AlertData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [domoBase, setDomoBase] = useState('')
+
+  useEffect(() => {
+    apiGet<{ domo_url?: string }>('/api/auth/status')
+      .then(d => { if (d.domo_url) setDomoBase(d.domo_url) })
+      .catch(() => {})
+  }, [])
 
   const load = () => {
     setLoading(true)
@@ -96,7 +101,7 @@ export default function Alert() {
                       <td><span className="badge badge-failed">{ds.last_execution_state}</span></td>
                       <td>{ds.card_count || '-'}</td>
                       <td>
-                        <a href={`${DOMO_BASE}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${domoBase}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
                           className="text-slate-400 hover:text-blue-500 transition-colors">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
@@ -129,7 +134,7 @@ export default function Alert() {
                       <td className="font-medium max-w-[300px] truncate">{df.name}</td>
                       <td><span className="badge badge-failed">{df.last_execution_state}</span></td>
                       <td>
-                        <a href={`${DOMO_BASE}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${domoBase}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
                           className="text-slate-400 hover:text-purple-500 transition-colors">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
