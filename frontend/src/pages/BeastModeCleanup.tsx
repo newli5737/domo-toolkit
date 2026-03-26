@@ -133,7 +133,9 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const connectWs = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//localhost:8000/api/beastmode/ws/progress`)
+    const apiBase = import.meta.env.VITE_API_BASE || ''
+    const host = apiBase ? new URL(apiBase).host : window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/api/beastmode/ws/progress`)
     wsRef.current = ws
 
     ws.onmessage = (event) => {
