@@ -32,7 +32,7 @@ interface Summary {
   duplicates_normalized: { dup_hash: string; cnt: number; bm_ids: number[] }[]
   duplicates_structure: { dup_hash: string; cnt: number; bm_ids: number[] }[]
   duplicates_names: { name: string; cnt: number; bm_ids: number[] }[]
-  top_dirty_datasets: { dataset_id: string; dataset_name: string; url: string; total: number; unused: number; cleanup_candidates: number }[]
+  top_dirty_datasets: { dataset_id: string; url: string; total: number; unused: number; cleanup_candidates: number }[]
 }
 
 interface BmRow {
@@ -129,6 +129,10 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 50
+
   // WebSocket connection
   const connectWs = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
@@ -168,6 +172,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   // Load group data khi đổi tab (chỉ khi không search)
   useEffect(() => {
     if (!searchQuery) loadGroupData(activeTab)
+    setCurrentPage(1)
   }, [activeTab, summary])
 
   const startCrawl = async () => {
@@ -230,7 +235,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const loadGroupData = async (group: number) => {
     setLoadingGroup(true)
     try {
-      const data = await apiGet<{ data: BmRow[] }>(`/api/beastmode/group/${group}?limit=200`)
+      const data = await apiGet<{ data: BmRow[] }>(`/api/beastmode/group/${group}?limit=5000`)
       setGroupData(data.data)
     } catch {
       setGroupData([])
@@ -630,29 +635,28 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                     ? (lang === 'ja' ? 'Beast Modeが見つかりません' : 'Không tìm thấy Beast Mode nào')
                     : (lang === 'ja' ? 'このグループにBeast Modeはありません' : 'Không có Beast Mode nào trong nhóm này')}
                 </div>
-              ) : (
+              ) : (() => {
+                const allData = searchResults ?? groupData
+                const totalPages = Math.ceil(allData.length / PAGE_SIZE)
+                const pageData = allData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                return (
+                <>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[var(--color-border)]">
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">ID</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Legacy ID</th>
-                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Tên</th>
-                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Nhóm</th>
+                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? '名前' : 'Tên'}</th>
+                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'グループ' : 'Nhóm'}</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cards</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Views</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
-                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Flag</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Complexity</th>
-                        {/* TODO: tạm ẩn nút xóa
-                        {!readOnly && (
-                          <th className="px-4 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500">Thao tác</th>
-                        )}
-                        */}
                       </tr>
                     </thead>
                     <tbody>
-                      {(searchResults ?? groupData).map(bm => {
+                      {pageData.map(bm => {
                         const gcfg = GROUP_CONFIG.find(g => g.num === bm.group_number)
                         const badgeColor = gcfg?.color ?? 'cyan'
                         return (
@@ -682,33 +686,54 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.active_cards_count}</td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.total_views.toLocaleString()}</td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.referenced_by_count}</td>
-                            <td className="px-4 py-3">
-                              {bm.naming_flag && (
-                                <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-accent-yellow)]/15 text-[var(--color-accent-yellow)]">
-                                  {bm.naming_flag}
-                                </span>
-                              )}
-                            </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.complexity_score}</td>
-                            {/* TODO: tạm ẩn nút xóa
-                            {!readOnly && (bm.group_number === 1 || bm.group_number === 2) && (
-                              <td className="px-4 py-3 text-center">
-                                <button
-                                  onClick={() => setDeleteTarget(bm)}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-accent-red)]/10 text-[var(--color-accent-red)] hover:bg-[var(--color-accent-red)]/20 transition-colors"
-                                >
-                                  🗑️ {lang === 'ja' ? '削除' : 'Xóa'}
-                                </button>
-                              </td>
-                            )}
-                            */}
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
                 </div>
-              )}
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
+                    <span className="text-xs text-gray-500">
+                      {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, allData.length)} / {allData.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-bg-secondary)] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >←</button>
+                      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                        let page: number
+                        if (totalPages <= 7) page = i + 1
+                        else if (currentPage <= 4) page = i + 1
+                        else if (currentPage >= totalPages - 3) page = totalPages - 6 + i
+                        else page = currentPage - 3 + i
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                              currentPage === page
+                                ? 'bg-[var(--color-accent-blue)] text-white'
+                                : 'bg-[var(--color-bg-secondary)] text-gray-400 hover:text-white'
+                            }`}
+                          >{page}</button>
+                        )
+                      })}
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-bg-secondary)] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >→</button>
+                    </div>
+                  </div>
+                )}
+                </>
+                )
+              })()}
             </div>
           </div>
 
@@ -726,10 +751,10 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                         href={ds.url || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-48 text-xs text-[var(--color-accent-cyan)] hover:underline text-right truncate flex-shrink-0"
-                        title={ds.dataset_name || ds.dataset_id}
+                        className="w-48 text-xs text-[var(--color-accent-cyan)] hover:underline text-right truncate flex-shrink-0 font-mono"
+                        title={ds.dataset_id}
                       >
-                        {ds.dataset_name || ds.dataset_id || 'N/A'}
+                        {ds.dataset_id || 'N/A'}
                       </a>
                       <div className="flex-1 h-6 bg-[var(--color-bg-secondary)] rounded overflow-hidden">
                         <div
