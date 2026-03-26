@@ -110,7 +110,7 @@ interface Props {
 export default function BeastModeCleanup({ readOnly = false }: Props) {
   const { lang } = useI18n()
   const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
-  const STEP_LABELS = lang === 'ja' ? STEP_LABELS_JA : STEP_LABELS_VI
+  const _STEP_LABELS = lang === 'ja' ? STEP_LABELS_JA : STEP_LABELS_VI
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [activeTab, setActiveTab] = useState(1)

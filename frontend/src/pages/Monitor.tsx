@@ -205,7 +205,7 @@ export default function Monitor() {
     } catch { return String(s) }
   }
 
-  const getScheduleBadge = (state: string) => {
+  const _getScheduleBadge = (state: string) => {
     if (!state) return <span className="badge badge-gray">-</span>
     switch (state.toUpperCase()) {
       case 'ACTIVE': return <span className="badge badge-success"><CheckCircle className="w-3 h-3" /> {lang === 'vi' ? 'Hoạt động' : 'アクティブ'}</span>
@@ -390,7 +390,7 @@ export default function Monitor() {
                                 {alert.card_count != null && alert.card_count > 0 && ` | Cards: ${alert.card_count}`}
                                 {alert.hours_ago != null && ` | ${alert.hours_ago}h ago`}
                               </td>
-                              <td className="text-slate-500 text-sm">{fmtTime(alert.last_updated || alert.last_execution_time)}</td>
+                              <td className="text-slate-500 text-sm">{fmtTime(alert.last_updated || alert.last_execution_time || null)}</td>
                             </tr>
                           ))}
                         </tbody>
