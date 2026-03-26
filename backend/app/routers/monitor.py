@@ -62,12 +62,12 @@ def _post_crawl_alert(db: DomoDatabase):
     # Query failed datasets
     failed_ds = db.query(
         "SELECT id, name, provider_type, last_execution_state, card_count "
-        "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+        "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
     )
     # Query failed dataflows
     failed_df = db.query(
         "SELECT id, name, last_execution_state "
-        "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+        "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
     )
 
     all_failed_ds = [dict(r) for r in (failed_ds or [])]
@@ -623,21 +623,21 @@ def trigger_auto_check(req: AutoCheckRequest):
         failed_ssh = db.query(
             "SELECT id, name, provider_type, last_execution_state, card_count "
             "FROM datasets WHERE LOWER(provider_type) = 'mysql-ssh' "
-            "AND UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
         )
 
         # 1b. Datasets có card_count >= N bị FAILED
         failed_main = db.query(
             "SELECT id, name, provider_type, last_execution_state, card_count "
             "FROM datasets WHERE card_count >= %s "
-            "AND UPPER(COALESCE(last_execution_state, '')) = 'FAILED'",
+            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'",
             (req.min_card_count,)
         )
 
         # 1c. Dataflows bị FAILED
         failed_df = db.query(
             "SELECT id, name, last_execution_state "
-            "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+            "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
         )
 
         # Deduplicate
