@@ -34,24 +34,59 @@ _alert_data = {
     "failed_dataflows": [],  # [{id, name, last_execution_state}]
 }
 
-# Alert config — set by FE Settings page, persisted to JSON file
-_ALERT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'alert_config.json')
+# Alert config — stored in DB app_settings table
 
 def _load_alert_config() -> dict:
-    """Load alert config from JSON file."""
+    """Load alert config from DB app_settings table."""
     try:
-        with open(_ALERT_CONFIG_PATH, 'r') as f:
-            return json.load(f)
-    except Exception:
-        return {"alert_email": "", "min_card_count": 40}
+        db = _get_db()
+        rows = db.query("SELECT key, value FROM app_settings WHERE key LIKE 'alert_%' OR key LIKE 'schedule_%'")
+        db.close()
+        config = {"alert_email": "", "min_card_count": 40,
+                  "schedule_enabled": False, "schedule_hour": 8, "schedule_minute": 0,
+                  "schedule_days": "mon,tue,wed,thu,fri"}
+        for row in (rows or []):
+            k, v = row["key"], row["value"]
+            if k == "alert_email":
+                config["alert_email"] = v
+            elif k == "alert_min_card_count":
+                config["min_card_count"] = int(v)
+            elif k == "schedule_enabled":
+                config["schedule_enabled"] = v.lower() == "true"
+            elif k == "schedule_hour":
+                config["schedule_hour"] = int(v)
+            elif k == "schedule_minute":
+                config["schedule_minute"] = int(v)
+            elif k == "schedule_days":
+                config["schedule_days"] = v
+        return config
+    except Exception as e:
+        print(f"[ALERT-CONFIG] Load from DB error: {e}")
+        return {"alert_email": "", "min_card_count": 40,
+                "schedule_enabled": False, "schedule_hour": 8, "schedule_minute": 0,
+                "schedule_days": "mon,tue,wed,thu,fri"}
 
 def _save_alert_config(config: dict):
-    """Save alert config to JSON file."""
+    """Save alert config to DB app_settings table."""
     try:
-        with open(_ALERT_CONFIG_PATH, 'w') as f:
-            json.dump(config, f, indent=2)
+        db = _get_db()
+        mappings = {
+            "alert_email": str(config.get("alert_email", "")),
+            "alert_min_card_count": str(config.get("min_card_count", 40)),
+            "schedule_enabled": str(config.get("schedule_enabled", False)).lower(),
+            "schedule_hour": str(config.get("schedule_hour", 8)),
+            "schedule_minute": str(config.get("schedule_minute", 0)),
+            "schedule_days": str(config.get("schedule_days", "mon,tue,wed,thu,fri")),
+        }
+        for k, v in mappings.items():
+            db.execute(
+                """INSERT INTO app_settings (key, value, updated_at) VALUES (%s, %s, NOW())
+                   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()""",
+                (k, v)
+            )
+        db.close()
     except Exception as e:
-        print(f"[ALERT-CONFIG] Save error: {e}")
+        print(f"[ALERT-CONFIG] Save to DB error: {e}")
 
 _alert_config = _load_alert_config()
 
@@ -590,6 +625,10 @@ class AutoCheckRequest(BaseModel):
     min_card_count: int = 40
     comment_ok: str = "【1次データ取得エラー確認結果】\nエラーがなかった旨\n\n【メインDataSetエラー確認結果】\nエラーがなかった旨"
     alert_email: str = ""
+    schedule_enabled: bool = False
+    schedule_hour: int = 8
+    schedule_minute: int = 0
+    schedule_days: str = "mon,tue,wed,thu,fri"
 
 
 @router.post("/auto-check")
@@ -795,11 +834,23 @@ def get_alerts():
 
 @router.post("/save-alert-config")
 def save_alert_config_endpoint(req: AutoCheckRequest):
-    """Lưu cấu hình alert email + params vào file."""
+    """Lưu cấu hình alert email + schedule vào DB."""
     _alert_config["alert_email"] = req.alert_email
     _alert_config["min_card_count"] = req.min_card_count
+    _alert_config["schedule_enabled"] = req.schedule_enabled
+    _alert_config["schedule_hour"] = req.schedule_hour
+    _alert_config["schedule_minute"] = req.schedule_minute
+    _alert_config["schedule_days"] = req.schedule_days
     _save_alert_config(_alert_config)
-    return {"saved": True, "alert_email": req.alert_email, "min_card_count": req.min_card_count}
+
+    # Update scheduler
+    try:
+        from app.scheduler import update_schedule
+        update_schedule(_alert_config)
+    except Exception as e:
+        print(f"[SAVE-CONFIG] Scheduler update error: {e}")
+
+    return {"saved": True, "config": _alert_config}
 
 
 @router.get("/auto-check-config")
@@ -820,4 +871,8 @@ def get_auto_check_config():
         "alert_email_to": _alert_config.get("alert_email", ""),
         "min_card_count": _alert_config.get("min_card_count", 40),
         "has_gmail": bool(settings.gmail_email and settings.gmail_app_password),
+        "schedule_enabled": _alert_config.get("schedule_enabled", False),
+        "schedule_hour": _alert_config.get("schedule_hour", 8),
+        "schedule_minute": _alert_config.get("schedule_minute", 0),
+        "schedule_days": _alert_config.get("schedule_days", "mon,tue,wed,thu,fri"),
     }

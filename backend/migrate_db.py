@@ -103,6 +103,15 @@ def run_migration():
         )
     """, "CREATE monitor_checks"))
 
+    # App settings table — key-value store for persistent config
+    migrations.append(("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """, "CREATE app_settings"))
+
     for sql, label in migrations:
         try:
             db.execute(sql)

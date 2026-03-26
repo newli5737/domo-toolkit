@@ -1,0 +1,104 @@
+"""Scheduler — APScheduler cron job for auto-check datasets & dataflows."""
+
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+log = logging.getLogger(__name__)
+
+_scheduler: BackgroundScheduler | None = None
+
+# Day name mapping
+DAY_MAP = {
+    "mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
+    "fri": "fri", "sat": "sat", "sun": "sun",
+}
+
+
+def _run_auto_check():
+    """Execute the auto-check logic (crawl + check + alert)."""
+    print("[SCHEDULER] ⏰ Auto-check triggered by cron")
+    try:
+        from app.routers.monitor import trigger_auto_check, AutoCheckRequest, _load_alert_config
+        config = _load_alert_config()
+        req = AutoCheckRequest(
+            alert_email=config.get("alert_email", ""),
+            min_card_count=config.get("min_card_count", 40),
+        )
+        result = trigger_auto_check(req)
+        print(f"[SCHEDULER] ✅ Auto-check done: {result}")
+    except Exception as e:
+        print(f"[SCHEDULER] ❌ Auto-check error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def init_scheduler(config: dict | None = None):
+    """Initialize the scheduler on app startup."""
+    global _scheduler
+    if _scheduler is not None:
+        return
+
+    _scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
+    _scheduler.start()
+    print("[SCHEDULER] 🚀 Scheduler started (Asia/Tokyo)")
+
+    if config is None:
+        try:
+            from app.routers.monitor import _load_alert_config
+            config = _load_alert_config()
+        except Exception:
+            config = {}
+
+    update_schedule(config)
+
+
+def update_schedule(config: dict):
+    """Update or create the cron job based on config."""
+    global _scheduler
+    if _scheduler is None:
+        return
+
+    job_id = "auto_check_cron"
+
+    # Remove existing job if any
+    try:
+        _scheduler.remove_job(job_id)
+        print(f"[SCHEDULER] Removed old job '{job_id}'")
+    except Exception:
+        pass
+
+    enabled = config.get("schedule_enabled", False)
+    if not enabled:
+        print("[SCHEDULER] Schedule disabled, no job created")
+        return
+
+    hour = config.get("schedule_hour", 8)
+    minute = config.get("schedule_minute", 0)
+    days_str = config.get("schedule_days", "mon,tue,wed,thu,fri")
+    days = ",".join(d.strip().lower()[:3] for d in days_str.split(",") if d.strip())
+
+    trigger = CronTrigger(
+        day_of_week=days,
+        hour=hour,
+        minute=minute,
+        timezone="Asia/Tokyo",
+    )
+
+    _scheduler.add_job(
+        _run_auto_check,
+        trigger=trigger,
+        id=job_id,
+        name="Domo Auto-Check (Dataset + Dataflow)",
+        replace_existing=True,
+    )
+    print(f"[SCHEDULER] ✅ Job scheduled: {days} at {hour:02d}:{minute:02d} JST")
+
+
+def shutdown_scheduler():
+    """Shutdown the scheduler."""
+    global _scheduler
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
+        print("[SCHEDULER] Scheduler shut down")

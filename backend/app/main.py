@@ -60,6 +60,10 @@ def startup():
     from app.routers.beastmode import cleanup_stale_jobs
     cleanup_stale_jobs()
 
+    # Khởi động scheduler
+    from app.scheduler import init_scheduler
+    init_scheduler()
+
     # Auto-login nếu có credentials trong .env
     if settings.domo_username and settings.domo_password:
         from app.routers.auth import get_auth, _save_session
@@ -71,6 +75,11 @@ def startup():
         else:
             print(f"⚠️ Auto-login thất bại: {result['message']}")
 
+
+@app.on_event("shutdown")
+def shutdown():
+    from app.scheduler import shutdown_scheduler
+    shutdown_scheduler()
 
 @app.get("/api/health")
 def health():
