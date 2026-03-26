@@ -636,9 +636,11 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Flag</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Complexity</th>
+                        {/* TODO: tạm ẩn nút xóa
                         {!readOnly && (
                           <th className="px-4 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500">Thao tác</th>
                         )}
+                        */}
                       </tr>
                     </thead>
                     <tbody>
@@ -680,6 +682,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.complexity_score}</td>
+                            {/* TODO: tạm ẩn nút xóa
                             {!readOnly && (bm.group_number === 1 || bm.group_number === 2) && (
                               <td className="px-4 py-3 text-center">
                                 <button
@@ -690,6 +693,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                                 </button>
                               </td>
                             )}
+                            */}
                           </tr>
                         )
                       })}
