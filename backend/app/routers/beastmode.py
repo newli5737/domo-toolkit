@@ -392,6 +392,7 @@ def _run_view_and_analyze(job_id: int):
     bm_service = BeastModeService(api, db)
 
     crawl_start = time.time()
+    _init_progress(job_id)
 
     log.info("=" * 60)
     log.info(f"🔄 PHÂN TÍCH LẠI TỪ DB (Job #{job_id})")
@@ -404,11 +405,10 @@ def _run_view_and_analyze(job_id: int):
             (datetime.now(), job_id)
         )
 
-        _update_step(db, job_id, 1, "Phân tích & phân loại",
-                     "[1/1] Đang phân tích từ DB...", 0, 1)
+        _update_progress(5, 0, 1, message="Đang phân tích từ DB...")
 
         summary = bm_service.analyze()
-        _update_step_progress(db, job_id, 1, 1)
+        _update_progress(5, 1, 1, status="done")
 
         total_time = time.time() - crawl_start
         log.info("=" * 60)
@@ -423,6 +423,7 @@ def _run_view_and_analyze(job_id: int):
             (datetime.now(), f"Hoàn tất: {summary['total']} BM",
              summary["total"], job_id)
         )
+        _finish_progress("done", f"Hoàn tất: {summary['total']} BM")
 
     except Exception as e:
         total_time = time.time() - crawl_start
@@ -431,6 +432,7 @@ def _run_view_and_analyze(job_id: int):
             "UPDATE crawl_jobs SET status = 'error', message = %s, finished_at = %s WHERE id = %s",
             (str(e)[:500], datetime.now(), job_id)
         )
+        _finish_progress("error", str(e)[:500])
     finally:
         db.close()
 
