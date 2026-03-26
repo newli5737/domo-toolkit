@@ -55,6 +55,69 @@ def _set_progress(step: str, processed: int, total: int):
     }
 
 
+def _post_crawl_alert(db: DomoDatabase):
+    """Sau mỗi lần crawl, kiểm tra FAILED và gửi email alert tự động."""
+    settings = get_settings()
+
+    # Query failed datasets
+    failed_ds = db.query(
+        "SELECT id, name, provider_type, last_execution_state, card_count "
+        "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+    )
+    # Query failed dataflows
+    failed_df = db.query(
+        "SELECT id, name, last_execution_state "
+        "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+    )
+
+    all_failed_ds = [dict(r) for r in (failed_ds or [])]
+    all_failed_df = [dict(r) for r in (failed_df or [])]
+
+    # Update alert state
+    _alert_data["checked_at"] = datetime.now().isoformat()
+    _alert_data["all_ok"] = len(all_failed_ds) == 0 and len(all_failed_df) == 0
+    _alert_data["failed_datasets"] = all_failed_ds
+    _alert_data["failed_dataflows"] = all_failed_df
+
+    if not _alert_data["all_ok"]:
+        # Gửi email alert
+        to_email = settings.alert_email_to
+        if settings.gmail_email and settings.gmail_app_password and to_email:
+            subject = "【Domo監視】データエラー検出"
+            body_lines = ["Domoデータ監視でエラーが検出されました。\n"]
+
+            if all_failed_ds:
+                body_lines.append(f"■ エラーDataSet ({len(all_failed_ds)}件):")
+                for ds in all_failed_ds:
+                    body_lines.append(
+                        f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, "
+                        f"Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})"
+                    )
+
+            if all_failed_df:
+                body_lines.append(f"\n■ エラーDataFlow ({len(all_failed_df)}件):")
+                for df in all_failed_df:
+                    body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')})")
+
+            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
+            body = "\n".join(body_lines)
+
+            sent = send_alert_email(
+                subject=subject,
+                body=body,
+                to_email=to_email,
+                from_email=settings.gmail_email,
+                app_password=settings.gmail_app_password,
+            )
+            print(f"[AUTO-ALERT] Email sent={sent} to={to_email}, "
+                  f"ds_fail={len(all_failed_ds)}, df_fail={len(all_failed_df)}")
+        else:
+            print(f"[AUTO-ALERT] Has failures but email not configured "
+                  f"(gmail={bool(settings.gmail_email)}, to={bool(to_email)})")
+    else:
+        print("[AUTO-ALERT] All OK — no alert needed")
+
+
 # ─── Endpoints ────────────────────────────────────────────
 
 @router.post("/check")
@@ -195,6 +258,9 @@ def crawl_datasets_only(
             service.save_datasets(dataset_details)
             print(f"[CRAWL] Lưu xong {len(dataset_details)} datasets vào DB")
 
+            # Auto-alert nếu có FAILED
+            _post_crawl_alert(db)
+
             _monitor_job["result"] = {
                 "type": "crawl_datasets",
                 "summary": {"datasets": {"total_crawled": len(dataset_details)}},
@@ -276,6 +342,9 @@ def crawl_dataflows_only(
             _set_progress("Đang cập nhật trạng thái output datasets...", 0, 1)
             service.propagate_dataflow_status_to_datasets(dataflow_details)
             print(f"[CRAWL] Propagated dataflow status to output datasets")
+
+            # Auto-alert nếu có FAILED
+            _post_crawl_alert(db)
 
             _monitor_job["result"] = {
                 "type": "crawl_dataflows",
