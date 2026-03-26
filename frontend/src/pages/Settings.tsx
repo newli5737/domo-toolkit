@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, ExternalLink, CheckCircle, AlertTriangle, PlayCircle, Mail, Loader } from 'lucide-react'
+import { Settings as SettingsIcon, ExternalLink, CheckCircle, AlertTriangle, PlayCircle, Mail, Loader, Save } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
 import { useI18n } from '../i18n'
 
@@ -8,6 +8,7 @@ interface AutoCheckConfig {
   backlog_issue_id: string
   has_backlog_cookie: boolean
   alert_email_to: string
+  min_card_count: number
   has_gmail: boolean
 }
 
@@ -22,15 +23,32 @@ export default function Settings() {
   )
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     apiGet<AutoCheckConfig>('/api/monitor/auto-check-config')
       .then(d => {
         setConfig(d)
         if (d.alert_email_to) setAlertEmail(d.alert_email_to)
+        if (d.min_card_count) setMinCards(d.min_card_count)
       })
       .catch(() => {})
   }, [])
+
+  const saveConfig = async () => {
+    setSaving(true)
+    setSaved(false)
+    try {
+      await apiPost('/api/monitor/save-alert-config', {
+        alert_email: alertEmail,
+        min_card_count: minCards,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {}
+    finally { setSaving(false) }
+  }
 
   const runAutoCheck = async () => {
     setRunning(true)
@@ -112,6 +130,15 @@ export default function Settings() {
                   placeholder="user@example.com"
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" />
               </div>
+            </div>
+
+            {/* Save config button */}
+            <div className="flex items-center gap-3">
+              <button onClick={saveConfig} disabled={saving} className="btn btn-outline" style={{padding: '6px 16px'}}>
+                {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {lang === 'vi' ? 'Lưu cấu hình' : '設定を保存'}
+              </button>
+              {saved && <span className="text-xs text-green-600">✓ {lang === 'vi' ? 'Đã lưu!' : '保存しました！'}</span>}
             </div>
 
             {/* Comment template */}

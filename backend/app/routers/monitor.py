@@ -1,6 +1,7 @@
 """Monitor Router — API endpoints cho giám sát datasets & dataflows."""
 
 import json
+import os
 import threading
 import requests as http_requests
 from datetime import datetime
@@ -33,11 +34,26 @@ _alert_data = {
     "failed_dataflows": [],  # [{id, name, last_execution_state}]
 }
 
-# Alert config — set by FE Settings page, NOT from .env
-_alert_config = {
-    "alert_email": "",       # email nhận alert, cấu hình từ UI
-    "min_card_count": 40,
-}
+# Alert config — set by FE Settings page, persisted to JSON file
+_ALERT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'alert_config.json')
+
+def _load_alert_config() -> dict:
+    """Load alert config from JSON file."""
+    try:
+        with open(_ALERT_CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {"alert_email": "", "min_card_count": 40}
+
+def _save_alert_config(config: dict):
+    """Save alert config to JSON file."""
+    try:
+        with open(_ALERT_CONFIG_PATH, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        print(f"[ALERT-CONFIG] Save error: {e}")
+
+_alert_config = _load_alert_config()
 
 
 def _get_db() -> DomoDatabase:
@@ -784,7 +800,37 @@ def trigger_auto_check(req: AutoCheckRequest):
 @router.get("/alerts")
 def get_alerts():
     """Trả về danh sách datasets/dataflows có vấn đề."""
+    # Nếu in-memory trống, query DB trực tiếp
+    if not _alert_data.get("checked_at"):
+        try:
+            db = _get_db()
+            failed_ds = db.query(
+                "SELECT id, name, provider_type, last_execution_state, card_count "
+                "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
+            )
+            failed_df = db.query(
+                "SELECT id, name, last_execution_state "
+                "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
+            )
+            all_failed_ds = [dict(r) for r in (failed_ds or [])]
+            all_failed_df = [dict(r) for r in (failed_df or [])]
+            _alert_data["checked_at"] = datetime.now().isoformat()
+            _alert_data["all_ok"] = len(all_failed_ds) == 0 and len(all_failed_df) == 0
+            _alert_data["failed_datasets"] = all_failed_ds
+            _alert_data["failed_dataflows"] = all_failed_df
+            db.close()
+        except Exception as e:
+            print(f"[ALERTS] DB query error: {e}")
     return _alert_data
+
+
+@router.post("/save-alert-config")
+def save_alert_config_endpoint(req: AutoCheckRequest):
+    """Lưu cấu hình alert email + params vào file."""
+    _alert_config["alert_email"] = req.alert_email
+    _alert_config["min_card_count"] = req.min_card_count
+    _save_alert_config(_alert_config)
+    return {"saved": True, "alert_email": req.alert_email, "min_card_count": req.min_card_count}
 
 
 @router.get("/auto-check-config")
@@ -802,6 +848,7 @@ def get_auto_check_config():
         "backlog_base_url": settings.backlog_base_url,
         "backlog_issue_id": settings.backlog_issue_id,
         "has_backlog_cookie": has_cookie,
-        "alert_email_to": settings.alert_email_to,
+        "alert_email_to": _alert_config.get("alert_email", ""),
+        "min_card_count": _alert_config.get("min_card_count", 40),
         "has_gmail": bool(settings.gmail_email and settings.gmail_app_password),
     }
