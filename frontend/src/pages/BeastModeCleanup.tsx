@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiGet, apiPost, apiDownload, apiDelete } from '../api'
+import { useI18n } from '../i18n'
 
 interface StepProgress {
   name: string
@@ -47,11 +48,17 @@ interface BmRow {
   url: string
 }
 
-const GROUP_CONFIG = [
+const GROUP_CONFIG_VI = [
   { num: 1, label: 'Không sử dụng', color: 'red', icon: '🗑️' },
   { num: 2, label: 'Từng được dùng', color: 'orange', icon: '⏸️' },
   { num: 3, label: 'Card ít xem', color: 'cyan', icon: '👁️' },
   { num: 4, label: 'Đang hoạt động', color: 'green', icon: '✅' },
+]
+const GROUP_CONFIG_JA = [
+  { num: 1, label: '未使用', color: 'red', icon: '🗑️' },
+  { num: 2, label: '過去使用', color: 'orange', icon: '⏸️' },
+  { num: 3, label: '低閲覧', color: 'cyan', icon: '👁️' },
+  { num: 4, label: '稼働中', color: 'green', icon: '✅' },
 ]
 
 const COLOR_MAP: Record<string, string> = {
@@ -78,7 +85,8 @@ const BADGE_BG: Record<string, string> = {
 }
 
 const STEP_ICONS = ['🔍', '📋', '🃏', '👁️', '📊']
-const STEP_LABELS = ['Crawl BM', 'BM Details', 'Crawl Cards', 'View Counts', 'Phân tích']
+const STEP_LABELS_VI = ['Crawl BM', 'BM Details', 'Crawl Cards', 'View Counts', 'Phân tích']
+const STEP_LABELS_JA = ['BM取得', 'BM詳細', 'カード取得', '閲覧数', '分析']
 
 function formatTime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -91,7 +99,7 @@ function estimateRemaining(elapsed: number, percent: number): string {
   if (percent <= 0 || elapsed <= 0) return '—'
   const totalEstimate = (elapsed / percent) * 100
   const remaining = Math.max(0, Math.round(totalEstimate - elapsed))
-  if (remaining === 0) return 'sắp xong'
+  if (remaining === 0) return '—'
   return `~${formatTime(remaining)}`
 }
 
@@ -100,6 +108,9 @@ interface Props {
 }
 
 export default function BeastModeCleanup({ readOnly = false }: Props) {
+  const { lang } = useI18n()
+  const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
+  const STEP_LABELS = lang === 'ja' ? STEP_LABELS_JA : STEP_LABELS_VI
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [activeTab, setActiveTab] = useState(1)
@@ -283,9 +294,11 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Beast Mode Cleanup</h2>
+          <h2 className="text-2xl font-bold">{lang === 'ja' ? 'Beast Modeクリーンアップ' : 'Beast Mode Cleanup'}</h2>
           <p className="text-sm text-gray-400 mt-1">
-            {readOnly ? 'Xem kết quả phân tích Beast Mode' : 'Phân tích và phân loại Beast Mode dư thừa'}
+            {readOnly
+              ? (lang === 'ja' ? 'Beast Mode分析結果の閲覧' : 'Xem kết quả phân tích Beast Mode')
+              : (lang === 'ja' ? '冗長なBeast Modeの分析・分類' : 'Phân tích và phân loại Beast Mode dư thừa')}
           </p>
         </div>
         {!readOnly && (
@@ -322,10 +335,10 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
               {crawling ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Đang crawl...
+                  {lang === 'ja' ? 'クロール中...' : 'Đang crawl...'}
                 </>
               ) : (
-                '🔍 Bắt đầu Crawl'
+                lang === 'ja' ? '🔍 クロール開始' : '🔍 Bắt đầu Crawl'
               )}
             </button>
           </div>
@@ -351,7 +364,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 <div className="w-4 h-4 border-2 border-[var(--color-accent-blue)]/30 border-t-[var(--color-accent-blue)] rounded-full animate-spin" />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">Đang crawl dữ liệu</h3>
+                <h3 className="font-semibold text-sm">{lang === 'ja' ? 'データクロール中' : 'Đang crawl dữ liệu'}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">{crawlProgress.message}</p>
               </div>
             </div>
@@ -360,16 +373,16 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 onClick={cancelCrawl}
                 className="px-3 py-1.5 rounded-lg bg-[var(--color-accent-red)]/15 text-[var(--color-accent-red)] text-xs font-medium hover:bg-[var(--color-accent-red)]/25 transition-all"
               >
-                ✕ Hủy
+                ✕ {lang === 'ja' ? 'キャンセル' : 'Hủy'}
               </button>
               <div>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Đã chạy</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{lang === 'ja' ? '経過' : 'Đã chạy'}</p>
                 <p className="text-sm font-mono font-semibold text-[var(--color-accent-cyan)]">
                   {formatTime(crawlProgress.elapsed || 0)}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Còn lại</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{lang === 'ja' ? '残り' : 'Còn lại'}</p>
                 <p className="text-sm font-mono font-semibold text-[var(--color-accent-orange)]">
                   {estimateRemaining(crawlProgress.elapsed || 0, overallPercent)}
                 </p>
@@ -380,7 +393,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           {/* Overall progress bar */}
           <div className="px-6 py-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500">Tổng tiến trình</span>
+              <span className="text-xs text-gray-500">{lang === 'ja' ? '全体の進捗' : 'Tổng tiến trình'}</span>
               <span className="text-sm font-bold text-[var(--color-accent-cyan)]">
                 {overallPercent}%
               </span>
@@ -452,7 +465,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                         </p>
                       )}
                       {isDone && (
-                        <p className="text-[10px] text-[var(--color-accent-green)]">Xong ✓</p>
+                        <p className="text-[10px] text-[var(--color-accent-green)]">{lang === 'ja' ? '完了 ✓' : 'Xong ✓'}</p>
                       )}
                     </div>
 
@@ -473,7 +486,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       {/* Error */}
       {crawlProgress?.status === 'error' && (
         <div className="px-5 py-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[var(--color-accent-red)] text-sm">
-          ❌ Crawl thất bại: {crawlProgress.message}
+          ❌ {lang === 'ja' ? 'クロール失敗: ' : 'Crawl thất bại: '}{crawlProgress.message}
         </div>
       )}
 
@@ -481,11 +494,11 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       {!summary && !crawling && (
         <div className="text-center py-20">
           <div className="text-6xl mb-5">🔮</div>
-          <h3 className="text-xl font-semibold text-gray-300 mb-2">Chưa có dữ liệu</h3>
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">{lang === 'ja' ? 'データなし' : 'Chưa có dữ liệu'}</h3>
           <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
             {readOnly
-              ? 'Dữ liệu chưa được crawl. Vui lòng truy cập trang Admin để bắt đầu crawl.'
-              : 'Nhấn "Bắt đầu Crawl" để quét toàn bộ Beast Mode trong Domo instance'}
+              ? (lang === 'ja' ? '未クロール。管理者ページでクロールを開始してください。' : 'Dữ liệu chưa được crawl. Vui lòng truy cập trang Admin để bắt đầu crawl.')
+              : (lang === 'ja' ? '「クロール開始」でDomoインスタンスの全Beast Modeをスキャン' : 'Nhấn "Bắt đầu Crawl" để quét toàn bộ Beast Mode trong Domo instance')}
           </p>
         </div>
       )}
@@ -498,7 +511,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
             {/* Tổng */}
             <div className="relative bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-6 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20">
               <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r ${COLOR_MAP.blue}`} />
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-3">Tổng Beast Mode</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-3">{lang === 'ja' ? 'Beast Mode合計' : 'Tổng Beast Mode'}</p>
               <p className={`text-3xl font-extrabold tracking-tight ${TEXT_COLOR.blue}`}>
                 {summary.total.toLocaleString()}
               </p>
@@ -527,21 +540,21 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-purple)]/15 flex items-center justify-center text-lg">📋</div>
               <div>
-                <p className="text-xs text-gray-500">BM trùng lặp</p>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? '重複BM' : 'BM trùng lặp'}</p>
                 <p className="text-xl font-bold text-[var(--color-accent-purple)]">{summary.duplicates.length}</p>
               </div>
             </div>
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-yellow)]/15 flex items-center justify-center text-lg">⚠️</div>
               <div>
-                <p className="text-xs text-gray-500">Tên có vấn đề</p>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? '命名問題' : 'Tên có vấn đề'}</p>
                 <p className="text-xl font-bold text-[var(--color-accent-yellow)]">{summary.naming_issues_count}</p>
               </div>
             </div>
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-red)]/15 flex items-center justify-center text-lg">📊</div>
               <div>
-                <p className="text-xs text-gray-500">Dataset cần dọn</p>
+                <p className="text-xs text-gray-500">{lang === 'ja' ? 'クリーンアップ対象' : 'Dataset cần dọn'}</p>
                 <p className="text-xl font-bold text-[var(--color-accent-red)]">{summary.top_dirty_datasets.length}</p>
               </div>
             </div>
@@ -550,7 +563,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           {/* Search + Tabs + Table */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">{searchResults ? `Kết quả tìm kiếm (${searchResults.length})` : 'Chi tiết theo nhóm'}</h3>
+              <h3 className="text-lg font-bold">{searchResults ? (lang === 'ja' ? `検索結果 (${searchResults.length})` : `Kết quả tìm kiếm (${searchResults.length})`) : (lang === 'ja' ? 'グループ別詳細' : 'Chi tiết theo nhóm')}</h3>
             </div>
 
             {/* Search bar */}
@@ -559,7 +572,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 type="text"
                 value={searchQuery}
                 onChange={e => handleSearch(e.target.value)}
-                placeholder="🔍 Tìm theo tên hoặc ID..."
+                placeholder={lang === 'ja' ? '🔍 名前またはIDで検索...' : '🔍 Tìm theo tên hoặc ID...'}
                 className="w-full px-5 py-3 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border)] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[var(--color-accent-cyan)] focus:shadow-[0_0_0_2px] focus:shadow-[var(--color-accent-cyan)]/10 transition-all"
               />
               {searching && (
@@ -601,11 +614,13 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
               {(loadingGroup || searching) ? (
                 <div className="p-12 text-center">
                   <div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-accent-cyan)] rounded-full animate-spin mx-auto" />
-                  <p className="text-sm text-gray-500 mt-3">Đang tải...</p>
+                  <p className="text-sm text-gray-500 mt-3">{lang === 'ja' ? '読み込み中...' : 'Đang tải...'}</p>
                 </div>
               ) : (searchResults ?? groupData).length === 0 ? (
                 <div className="p-12 text-center text-gray-500 text-sm">
-                  {searchResults !== null ? 'Không tìm thấy Beast Mode nào' : 'Không có Beast Mode nào trong nhóm này'}
+                  {searchResults !== null
+                    ? (lang === 'ja' ? 'Beast Modeが見つかりません' : 'Không tìm thấy Beast Mode nào')
+                    : (lang === 'ja' ? 'このグループにBeast Modeはありません' : 'Không có Beast Mode nào trong nhóm này')}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -671,7 +686,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                                   onClick={() => setDeleteTarget(bm)}
                                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-accent-red)]/10 text-[var(--color-accent-red)] hover:bg-[var(--color-accent-red)]/20 transition-colors"
                                 >
-                                  🗑️ Xóa
+                                  🗑️ {lang === 'ja' ? '削除' : 'Xóa'}
                                 </button>
                               </td>
                             )}
@@ -688,7 +703,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           {/* Top dirty datasets */}
           {summary.top_dirty_datasets.length > 0 && (
             <div>
-              <h3 className="text-lg font-bold mb-4">🏭 Dataset cần dọn dẹp nhất</h3>
+              <h3 className="text-lg font-bold mb-4">{lang === 'ja' ? '🏭 クリーンアップ対象DataSet' : '🏭 Dataset cần dọn dẹp nhất'}</h3>
               <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-6 space-y-3">
                 {summary.top_dirty_datasets.map((ds, i) => {
                   const maxUnused = Math.max(...summary.top_dirty_datasets.map(d => d.unused), 1)
@@ -724,9 +739,9 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="text-center mb-6">
               <div className="text-4xl mb-3">⚠️</div>
-              <h3 className="text-lg font-bold mb-2">Xác nhận xóa Beast Mode</h3>
+              <h3 className="text-lg font-bold mb-2">{lang === 'ja' ? 'Beast Mode削除の確認' : 'Xác nhận xóa Beast Mode'}</h3>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Bạn có chắc muốn xóa BM này khỏi tất cả cards liên kết?
+                {lang === 'ja' ? 'このBMを関連するすべてのカードから削除しますか？' : 'Bạn có chắc muốn xóa BM này khỏi tất cả cards liên kết?'}
               </p>
             </div>
 
@@ -763,7 +778,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 disabled={deleting}
                 className="flex-1 px-5 py-2.5 rounded-lg bg-[var(--color-bg-secondary)] text-gray-400 font-semibold text-sm hover:bg-white/10 transition-colors disabled:opacity-50"
               >
-                Hủy
+                {lang === 'ja' ? 'キャンセル' : 'Hủy'}
               </button>
               <button
                 onClick={handleDelete}
@@ -773,10 +788,10 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 {deleting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Đang xóa...
+                    {lang === 'ja' ? '削除中...' : 'Đang xóa...'}
                   </>
                 ) : (
-                  '🗑️ Xóa'
+                  lang === 'ja' ? '🗑️ 削除' : '🗑️ Xóa'
                 )}
               </button>
             </div>

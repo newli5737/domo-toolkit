@@ -15,9 +15,26 @@ class Settings(BaseSettings):
 
     # Domo
     domo_instance: str = "astecpaints-co-jp.domo.com"
+    domo_username: str = ""
+    domo_password: str = ""
+
+    # Monitor
+    monitor_stale_hours: int = 24
+    monitor_min_card_count: int = 0
 
     # Google API (optional)
     google_api_key: str = ""
+
+    # Backlog
+    backlog_base_url: str = "https://mothers-sp.backlog.jp"
+    backlog_cookie: str = ""
+    backlog_issue_id: str = ""
+    backlog_csrf_token: str = ""
+
+    # Email Alert (Gmail SMTP)
+    gmail_email: str = ""
+    gmail_app_password: str = ""
+    alert_email_to: str = ""
 
     @property
     def db_url(self) -> str:

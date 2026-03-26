@@ -173,8 +173,43 @@ class DomoDatabase:
             id TEXT PRIMARY KEY,
             name TEXT,
             row_count BIGINT,
-            card_count INTEGER,
-            last_updated TIMESTAMP
+            column_count INTEGER DEFAULT 0,
+            card_count INTEGER DEFAULT 0,
+            data_flow_count INTEGER DEFAULT 0,
+            provider_type TEXT,
+            stream_id TEXT,
+            schedule_state TEXT,
+            last_execution_state TEXT,
+            last_updated TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT NOW()
+        """)
+
+        # Dataflows
+        self.ensure_table("dataflows", """
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            status TEXT,
+            paused BOOLEAN DEFAULT FALSE,
+            database_type TEXT,
+            last_execution_time TIMESTAMP,
+            last_execution_state TEXT,
+            execution_count INTEGER DEFAULT 0,
+            owner TEXT,
+            output_dataset_count INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT NOW()
+        """)
+
+        # Monitor check results
+        self.ensure_table("monitor_checks", """
+            id SERIAL PRIMARY KEY,
+            check_type TEXT NOT NULL,
+            total_checked INTEGER DEFAULT 0,
+            failed_count INTEGER DEFAULT 0,
+            stale_count INTEGER DEFAULT 0,
+            ok_count INTEGER DEFAULT 0,
+            filters_json TEXT,
+            details_json TEXT,
+            checked_at TIMESTAMP DEFAULT NOW()
         """)
 
         # Kết quả phân tích BM
@@ -242,3 +277,27 @@ class DomoDatabase:
             """)
         except Exception:
             pass
+
+        # Migrate: add new columns to datasets table
+        dataset_new_cols = [
+            ("column_count", "INTEGER DEFAULT 0"),
+            ("data_flow_count", "INTEGER DEFAULT 0"),
+            ("provider_type", "TEXT"),
+            ("stream_id", "TEXT"),
+            ("schedule_state", "TEXT"),
+            ("last_execution_state", "TEXT"),
+            ("updated_at", "TIMESTAMP DEFAULT NOW()"),
+        ]
+        for col_name, col_type in dataset_new_cols:
+            try:
+                self.execute(f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                       WHERE table_name='datasets' AND column_name='{col_name}') THEN
+                            ALTER TABLE datasets ADD COLUMN {col_name} {col_type};
+                        END IF;
+                    END $$;
+                """)
+            except Exception:
+                pass

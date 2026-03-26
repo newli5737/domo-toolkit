@@ -1,0 +1,546 @@
+{
+    "id": 499,
+    "valid": true,
+    "invalidExecutionId": null,
+    "transport": {
+        "type": "CONNECTOR",
+        "description": "com.domo.connector.mysql-ssh",
+        "version": "3"
+    },
+    "updateMethod": "REPLACE",
+    "dataProvider": {
+        "id": 364,
+        "key": "mysql-ssh",
+        "name": "MySQL SSH",
+        "url": "http://www.mysql.com",
+        "defaultConnectorId": "com.domo.connector.mysql-ssh",
+        "defaultConnectorLabel": "MySQL SSH",
+        "authenticationScheme": "fields",
+        "authenticationSchemeConfiguration": [
+            {
+                "id": 17739,
+                "name": "driver",
+                "type": "dropdown",
+                "text": "JDBC Driver",
+                "tooltipText": "Select the JDBC driver to use",
+                "required": false,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "mysql-connector-java-5.1.47.jar",
+                "restrictions": null,
+                "sortOrder": null,
+                "data": {
+                    "options": [
+                        {
+                            "label": "8.0.13",
+                            "value": "mysql-connector-java-8.0.13.jar"
+                        },
+                        {
+                            "label": "8.0.18 (latest)",
+                            "value": "mysql-connector-java-8.0.18.jar"
+                        },
+                        {
+                            "label": "5.1.48",
+                            "value": "mysql-connector-java-5.1.48.jar"
+                        },
+                        {
+                            "label": "5.1.38",
+                            "value": "mysql-connector-java-5.1.38.jar"
+                        },
+                        {
+                            "label": "5.1.47 (Default)",
+                            "value": "mysql-connector-java-5.1.47.jar"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": 12168,
+                "name": "host",
+                "type": "string",
+                "text": "SSH Server Hostname",
+                "tooltipText": "The UNIX Server to SSH tunnel through. To override the default SSH port, provide port number: Hostname:Port, e.g. 192.168.0.1:2266",
+                "required": true,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 1,
+                "data": {}
+            },
+            {
+                "id": 12169,
+                "name": "user",
+                "type": "string",
+                "text": "SSH Username",
+                "tooltipText": "The UNIX account username",
+                "required": true,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 2,
+                "data": {}
+            },
+            {
+                "id": 12171,
+                "name": "databasehost",
+                "type": "string",
+                "text": "Database hostname",
+                "tooltipText": "The MySQL database hostname or IP Address. To override the MySQL port number, provide port number: Hostname:Port, e.g. 192.168.0.1:2266",
+                "required": true,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 3,
+                "data": {}
+            },
+            {
+                "id": 12170,
+                "name": "password",
+                "type": "password",
+                "text": "SSH Password",
+                "tooltipText": "The UNIX account password",
+                "required": false,
+                "encrypted": true,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 3,
+                "data": {}
+            },
+            {
+                "id": 12172,
+                "name": "key",
+                "type": "text",
+                "text": "SSH Private Key",
+                "tooltipText": "The SSH private key (DES or RSA), in PEM format",
+                "required": true,
+                "encrypted": true,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 4,
+                "data": {}
+            },
+            {
+                "id": 12173,
+                "name": "database",
+                "type": "string",
+                "text": "Database name",
+                "tooltipText": "The MySQL database name",
+                "required": true,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 5,
+                "data": {}
+            },
+            {
+                "id": 12174,
+                "name": "dbuser",
+                "type": "string",
+                "text": "Database username",
+                "tooltipText": "The MySQL username",
+                "required": true,
+                "encrypted": false,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 6,
+                "data": {}
+            },
+            {
+                "id": 12175,
+                "name": "dbpassword",
+                "type": "password",
+                "text": "Database password",
+                "tooltipText": "The MySQL database password",
+                "required": true,
+                "encrypted": true,
+                "isConfigField": false,
+                "defaultValue": "",
+                "restrictions": null,
+                "sortOrder": 7,
+                "data": {}
+            }
+        ],
+        "connectorValidatorPresent": false,
+        "resourceBundlePresent": false,
+        "moduleHandler": null,
+        "iconPicker": false,
+        "unsafe": false,
+        "scope": "GLOBAL",
+        "producer": "DOMO",
+        "version": "0",
+        "dateCreated": 1494893308000,
+        "dateUpdated": 1652194117000,
+        "visibility": "WITH_CONNECTOR",
+        "type": "STANDARD",
+        "capabilities": {
+            "readingSecretsSupported": false,
+            "writingSecretsSupported": false,
+            "readingDataSupported": false,
+            "writingDataSupported": false,
+            "readingObjectsSupported": false,
+            "writingObjectsSupported": false,
+            "readingTablesSupported": false,
+            "writingTablesSupported": false
+        },
+        "customerOAuthConfigurationDataProviderType": null,
+        "advancedUiConnectorId": null
+    },
+    "account": {
+        "id": 5,
+        "userId": null,
+        "name": null,
+        "displayName": null,
+        "type": null,
+        "valid": false,
+        "allowExternalUse": false,
+        "dataProviderType": null,
+        "credentialsType": null,
+        "createdAt": null,
+        "createdBy": null,
+        "modifiedAt": null,
+        "modifiedBy": null,
+        "secretManagerAccountId": null,
+        "secretId": null,
+        "configurations": null,
+        "accountId": 5,
+        "accountTemplateId": null,
+        "accountTemplateAuthorizationId": null
+    },
+    "accounts": [],
+    "accountTemplate": null,
+    "dataSource": {
+        "id": "ce820f07-ef0e-49b9-8a4c-1fb78f2a49f8",
+        "displayType": "mysql-ssh",
+        "dataProviderType": "mysql-ssh",
+        "type": "mysql-ssh",
+        "name": "pb_t_building_view",
+        "description": "",
+        "owner": {
+            "id": "1181419734",
+            "name": "山領 惟謙",
+            "type": "USER",
+            "group": false
+        },
+        "status": "SUCCESS",
+        "created": 1708505377000,
+        "lastTouched": 1774494659000,
+        "lastUpdated": 1774494658767,
+        "nextUpdate": 1774508999472,
+        "rowCount": 753541,
+        "columnCount": 8,
+        "cardInfo": {
+            "cardCount": 0,
+            "cardViewCount": 0
+        },
+        "properties": {
+            "formulas": {
+                "formulas": {}
+            }
+        },
+        "state": "SUCCESS",
+        "validConfiguration": true,
+        "validAccount": true,
+        "accountId": 5,
+        "streamId": 499,
+        "transportType": "CONNECTOR",
+        "adc": false,
+        "adcExternal": false,
+        "masked": false,
+        "currentUserFullAccess": true,
+        "cloudId": "domo",
+        "cloudName": "Domo",
+        "permissions": "NONE",
+        "hidden": false,
+        "tags": "[\"legacy\",\"毎週 月〜金曜日 12時10分, 16時10分, 08時10分\"]",
+        "scheduleActive": true,
+        "cryoStatus": "ADRENALINE",
+        "cloudEngine": "domo"
+    },
+    "schemaDefinition": {
+        "columns": [
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "LONG",
+                "name": "building_id",
+                "id": "building_id",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_id",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "STRING",
+                "name": "building_name",
+                "id": "building_name",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_name",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "LONG",
+                "name": "building_classification_id",
+                "id": "building_classification_id",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_classification_id",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "STRING",
+                "name": "building_address_code",
+                "id": "building_address_code",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_address_code",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "STRING",
+                "name": "building_address",
+                "id": "building_address",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_address",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "STRING",
+                "name": "building_address_all",
+                "id": "building_address_all",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "building_address_all",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "DOUBLE",
+                "name": "_BATCH_ID_",
+                "id": "_BATCH_ID_",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "_BATCH_ID_",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            },
+            {
+                "ai": {
+                    "enabled": false,
+                    "synonyms": [],
+                    "context": ""
+                },
+                "type": "DATETIME",
+                "name": "_BATCH_LAST_RUN_",
+                "id": "_BATCH_LAST_RUN_",
+                "visible": true,
+                "metadata": {
+                    "colLabel": "_BATCH_LAST_RUN_",
+                    "colFormat": "",
+                    "isEncrypted": false
+                }
+            }
+        ]
+    },
+    "scheduleExpression": "0 10 3,7,23 ? 1-12 2-6 TZ=UTC",
+    "scheduleStartDate": null,
+    "advancedScheduleJson": "{\"type\":\"ADVANCED\",\"month\":[1,2,3,4,5,6,7,8,9,10,11,12],\"dayOfWeek\":[2,3,4,5,6],\"weekOfMonths\":[],\"interval\":240,\"between\":{\"startTime\":23,\"stopTime\":8},\"timezone\":\"UTC\"}",
+    "scheduleRetryExpression": null,
+    "scheduleRetryCount": 0,
+    "lastExecution": {
+        "streamId": 499,
+        "executionId": 9143,
+        "toe": "8IHIILAGN8-OU7O3-0V32E",
+        "startedAt": 1774494604.000000000,
+        "endedAt": 1774494658.000000000,
+        "updateMethod": "REPLACE",
+        "index": true,
+        "retryCount": 0,
+        "retryExecution": null,
+        "containerManagerId": "cm-f4e21a08-253b-405f-a197-9c0bae682d5e",
+        "uploadId": 9129,
+        "indexRequestKey": 20260326031057.729,
+        "currentState": "SUCCESS",
+        "runType": "AUTOMATED",
+        "createdAt": 1774494604.000000000,
+        "modifiedAt": 1774494658.000000000,
+        "latestPhase": null,
+        "currentPhase": null,
+        "removed": false,
+        "rowsInserted": 753541,
+        "bytesInserted": 84845073,
+        "startedBy": null,
+        "cancelledBy": null,
+        "dataTag": null,
+        "peakMemoryUsedBytes": null,
+        "peakMemoryCommittedBytes": null,
+        "exportable": false,
+        "manualIndex": false,
+        "errors": []
+    },
+    "lastSuccessfulExecution": {
+        "streamId": 499,
+        "executionId": 9143,
+        "toe": "8IHIILAGN8-OU7O3-0V32E",
+        "startedAt": 1774494604.000000000,
+        "endedAt": 1774494658.000000000,
+        "updateMethod": "REPLACE",
+        "index": true,
+        "retryCount": 0,
+        "retryExecution": null,
+        "containerManagerId": "cm-f4e21a08-253b-405f-a197-9c0bae682d5e",
+        "uploadId": 9129,
+        "indexRequestKey": 20260326031057.729,
+        "currentState": "SUCCESS",
+        "runType": "AUTOMATED",
+        "createdAt": 1774494604.000000000,
+        "modifiedAt": 1774494658.000000000,
+        "latestPhase": null,
+        "currentPhase": null,
+        "removed": false,
+        "rowsInserted": 753541,
+        "bytesInserted": 84845073,
+        "startedBy": null,
+        "cancelledBy": null,
+        "dataTag": null,
+        "peakMemoryUsedBytes": null,
+        "peakMemoryCommittedBytes": null,
+        "exportable": false,
+        "manualIndex": false,
+        "errors": []
+    },
+    "currentExecution": null,
+    "currentExecutionState": "SUCCESS",
+    "createdAt": 1708505378.000000000,
+    "createdBy": 1181419734,
+    "modifiedAt": 1774494658.000000000,
+    "modifiedBy": -1,
+    "scheduleState": "ACTIVE",
+    "scheduleAssertion": false,
+    "inactiveScheduleCode": null,
+    "configuration": [
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "updatemode.mode",
+            "type": "string",
+            "value": "Replace"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "QueryType",
+            "type": "string",
+            "value": "sql"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "tinyIsBit",
+            "type": "string",
+            "value": "yes"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "updatemode.upsertKeys",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "retry.retryNumber",
+            "type": "string",
+            "value": "0"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "sql",
+            "type": "string",
+            "value": "SELECT building_id,building_name,building_classification_id,building_address_code,building_address,building_address_all\nFROM paintbrain_master.pb_t_building_view;"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "includeHtmlTag",
+            "type": "string",
+            "value": "no"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "_description_",
+            "type": "string",
+            "value": ""
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "keepAlive",
+            "type": "string",
+            "value": "no"
+        },
+        {
+            "streamId": 499,
+            "category": "METADATA",
+            "name": "updatemode.mergeChoice",
+            "type": "string",
+            "value": ""
+        }
+    ]
+}

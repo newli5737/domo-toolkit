@@ -1,4 +1,4 @@
-"""Auth Router — Login Domo và quản lý session."""
+"""Auth Router — Login Domo bằng username/password hoặc J2 cookie upload."""
 
 import json
 from datetime import datetime
@@ -32,51 +32,61 @@ def get_db() -> DomoDatabase:
     )
 
 
+def _save_session(auth: DomoAuth):
+    """Lưu session vào DB sau khi login thành công."""
+    try:
+        db = get_db()
+        db.execute(
+            "UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE"
+        )
+        db.upsert("domo_sessions", {
+            "id": 1,
+            "username": auth.username,
+            "cookies_json": json.dumps(auth.cookies),
+            "csrf_token": auth.csrf_token,
+            "logged_in_at": datetime.now().isoformat(),
+            "is_active": True,
+        }, "id")
+        db.close()
+    except Exception:
+        pass
+
+
+# ─── Models ───────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str = ""
+    password: str = ""
+
 class LoginResponse(BaseModel):
     success: bool
     message: str
     username: str = ""
 
-import sys
-import asyncio
+
+# ─── Endpoints ────────────────────────────────────────────
 
 @router.post("/login", response_model=LoginResponse)
-def login():
-    """Mở browser Playwright cho user tự đăng nhập.
-    Chạy trong 1 Thread Pool thay vì event loop gốc của Uvicorn để tránh lỗi NotImplementedError.
+def login(req: LoginRequest):
+    """Login Domo bằng username/password.
+    Nếu không truyền credentials, dùng giá trị từ .env.
     """
     auth = get_auth()
-    
-    # Force khởi tạo tường minh Proactor Event Loop trên Windows
-    if sys.platform == "win32":
-        loop = asyncio.ProactorEventLoop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(auth.interactive_login())
-        finally:
-            loop.close()
-    else:
-        result = asyncio.run(auth.interactive_login())
+    settings = get_settings()
+
+    username = req.username or settings.domo_username
+    password = req.password or settings.domo_password
+
+    if not username or not password:
+        return LoginResponse(
+            success=False,
+            message="Thiếu username/password. Truyền trong request hoặc cấu hình trong .env",
+        )
+
+    result = auth.login(username, password)
 
     if result["success"]:
-        # Lưu session vào DB
-        try:
-            db = get_db()
-            db.execute(
-                "UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE"
-            )
-            db.upsert("domo_sessions", {
-                "id": 1,
-                "username": auth.username,
-                "cookies_json": json.dumps(auth.cookies),
-                "csrf_token": auth.csrf_token,
-                "logged_in_at": datetime.now().isoformat(),
-                "is_active": True,
-            }, "id")
-            db.close()
-        except Exception as e:
-            # DB lỗi nhưng login vẫn OK
-            pass
+        _save_session(auth)
 
     return LoginResponse(
         success=result["success"],
@@ -94,22 +104,7 @@ async def upload_cookies(payload: dict):
     result = auth.load_from_j2_cookies(payload)
 
     if result["success"]:
-        try:
-            db = get_db()
-            db.execute(
-                "UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE"
-            )
-            db.upsert("domo_sessions", {
-                "id": 1,
-                "username": auth.username,
-                "cookies_json": json.dumps(auth.cookies),
-                "csrf_token": auth.csrf_token,
-                "logged_in_at": datetime.now().isoformat(),
-                "is_active": True,
-            }, "id")
-            db.close()
-        except Exception:
-            pass
+        _save_session(auth)
 
     return LoginResponse(
         success=result["success"],

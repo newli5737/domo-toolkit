@@ -1,0 +1,702 @@
+"""Monitor Router — API endpoints cho giám sát datasets & dataflows."""
+
+import json
+import threading
+import requests as http_requests
+from datetime import datetime
+from fastapi import APIRouter, Query, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+
+from app.config import get_settings
+from app.core.auth import DomoAuth
+from app.core.api import DomoAPI
+from app.core.db import DomoDatabase
+from app.services.monitor import MonitorService
+from app.services.email_service import send_alert_email
+
+router = APIRouter(prefix="/api/monitor", tags=["monitor"])
+
+# Track running job
+_monitor_job = {
+    "running": False,
+    "started_at": None,
+    "result": None,
+    "progress": None,  # {"step": "...", "processed": N, "total": M, "percent": P}
+}
+
+# Alert data
+_alert_data = {
+    "checked_at": None,
+    "all_ok": True,
+    "failed_datasets": [],   # [{id, name, provider_type, last_execution_state, card_count}]
+    "failed_dataflows": [],  # [{id, name, last_execution_state}]
+}
+
+
+def _get_db() -> DomoDatabase:
+    settings = get_settings()
+    return DomoDatabase(
+        host=settings.db_host, port=settings.db_port,
+        dbname=settings.db_name, user=settings.db_user,
+        password=settings.db_password,
+    )
+
+
+def _get_auth() -> DomoAuth:
+    from app.routers.auth import get_auth
+    return get_auth()
+
+
+def _set_progress(step: str, processed: int, total: int):
+    pct = round(processed / total * 100, 1) if total > 0 else 0
+    _monitor_job["progress"] = {
+        "step": step, "processed": processed, "total": total, "percent": pct,
+    }
+
+
+# ─── Endpoints ────────────────────────────────────────────
+
+@router.post("/check")
+def trigger_health_check(
+    stale_hours: int = Query(default=24, description="Coi là stale nếu không update quá N giờ"),
+    min_card_count: int = Query(default=0, description="Chỉ check dataset dùng bởi >= N cards"),
+    provider_type: str = Query(default="", description="Chỉ check dataset import type (mysql, redshift...)"),
+    min_dataflow_count: int = Query(default=0, description="Chỉ check dataset liên kết >= N dataflows"),
+    max_workers: int = Query(default=10, description="Số luồng crawl song song"),
+):
+    """Trigger kiểm tra health check ngay lập tức.
+    Chạy async trong background thread.
+    """
+    global _monitor_job
+
+    auth = _get_auth()
+    if not auth.is_valid:
+        raise HTTPException(status_code=401, detail="Chưa login. Hãy login trước.")
+
+    if _monitor_job["running"]:
+        return {
+            "status": "already_running",
+            "message": "Health check đang chạy, vui lòng đợi...",
+            "started_at": _monitor_job["started_at"],
+        }
+
+    _monitor_job["running"] = True
+    _monitor_job["started_at"] = datetime.now().isoformat()
+    _monitor_job["result"] = None
+    _monitor_job["progress"] = None
+
+    def run_check():
+        try:
+            db = _get_db()
+            api = DomoAPI(auth)
+            service = MonitorService(api, db)
+            result = service.check_health(
+                stale_hours=stale_hours,
+                min_card_count=min_card_count,
+                provider_type=provider_type,
+                min_dataflow_count=min_dataflow_count,
+                max_workers=max_workers,
+            )
+            _monitor_job["result"] = result
+            db.close()
+        except Exception as e:
+            _monitor_job["result"] = {"error": str(e)}
+        finally:
+            _monitor_job["running"] = False
+            _monitor_job["progress"] = None
+
+    thread = threading.Thread(target=run_check, daemon=True)
+    thread.start()
+
+    return {
+        "status": "started",
+        "message": "Health check đã bắt đầu chạy.",
+        "filters": {
+            "stale_hours": stale_hours,
+            "min_card_count": min_card_count,
+            "provider_type": provider_type,
+            "min_dataflow_count": min_dataflow_count,
+        },
+    }
+
+
+@router.post("/crawl/datasets")
+def crawl_datasets_only(
+    max_workers: int = Query(default=10, description="Số luồng crawl song song"),
+):
+    """Cào toàn bộ datasets + fetch stream detail cho execution state + lưu DB."""
+    global _monitor_job
+
+    auth = _get_auth()
+    if not auth.is_valid:
+        raise HTTPException(status_code=401, detail="Chưa login. Hãy login trước.")
+
+    if _monitor_job["running"]:
+        return {"status": "already_running", "message": "Đang chạy crawl, vui lòng đợi..."}
+
+    _monitor_job["running"] = True
+    _monitor_job["started_at"] = datetime.now().isoformat()
+    _monitor_job["result"] = None
+    _monitor_job["progress"] = None
+
+    def run_crawl():
+        import concurrent.futures
+        try:
+            db = _get_db()
+            api = DomoAPI(auth)
+            service = MonitorService(api, db)
+
+            # Phase 1: Search all datasets (with progress)
+            def on_phase1_progress(done, total):
+                _set_progress("Đang cào danh sách datasets...", done, total)
+
+            dataset_details = service.crawl_all_datasets(progress_callback=on_phase1_progress)
+            print(f"[CRAWL] Phase 1 xong: {len(dataset_details)} datasets")
+
+            # Phase 2: Fetch detail + stream schedule for execution state (parallel)
+            total_ds = len(dataset_details)
+            print(f"[CRAWL] Phase 2: Fetching detail cho {total_ds} datasets...")
+            _set_progress("Đang lấy trạng thái thực thi...", 0, total_ds)
+
+            done_count = [0]  # use list for mutable in closure
+
+            def fetch_execution_state(ds):
+                ds_id = ds["id"]
+                try:
+                    # Get detail to retrieve streamId
+                    detail = service.fetch_dataset_detail(ds_id)
+                    if detail:
+                        stream_id = detail.get("stream_id", "")
+                        if stream_id:
+                            ds["stream_id"] = str(stream_id)
+                            # Fetch schedule via stream
+                            schedule = service.fetch_dataset_schedule(stream_id)
+                            if schedule:
+                                last_exec = schedule.get("last_execution")
+                                if last_exec:
+                                    ds["last_execution_state"] = last_exec.get("state", "")
+                                ds["schedule_state"] = schedule.get("schedule_state", ds.get("schedule_state", ""))
+                except Exception as e:
+                    if done_count[0] < 3:
+                        print(f"[CRAWL] Dataset {ds_id} error: {e}")
+                finally:
+                    done_count[0] += 1
+                    if done_count[0] % 20 == 0 or done_count[0] == total_ds:
+                        _set_progress("Đang lấy trạng thái thực thi...", done_count[0], total_ds)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                executor.map(fetch_execution_state, dataset_details)
+
+            print(f"[CRAWL] Phase 2 xong")
+
+            # Phase 3: Save to DB  
+            _set_progress("Đang lưu vào database...", 0, 1)
+            service.save_datasets(dataset_details)
+            print(f"[CRAWL] Lưu xong {len(dataset_details)} datasets vào DB")
+
+            _monitor_job["result"] = {
+                "type": "crawl_datasets",
+                "summary": {"datasets": {"total_crawled": len(dataset_details)}},
+                "checked_at": datetime.now().isoformat(),
+            }
+            db.close()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _monitor_job["result"] = {"error": str(e)}
+        finally:
+            _monitor_job["running"] = False
+            _monitor_job["progress"] = None
+
+    thread = threading.Thread(target=run_crawl, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "Đang cào datasets..."}
+
+
+@router.post("/crawl/dataflows")
+def crawl_dataflows_only(
+    max_workers: int = Query(default=10, description="Số luồng crawl song song"),
+):
+    """Cào toàn bộ dataflows + fetch executions + lưu DB."""
+    global _monitor_job
+
+    auth = _get_auth()
+    if not auth.is_valid:
+        raise HTTPException(status_code=401, detail="Chưa login. Hãy login trước.")
+
+    if _monitor_job["running"]:
+        return {"status": "already_running", "message": "Đang chạy crawl, vui lòng đợi..."}
+
+    _monitor_job["running"] = True
+    _monitor_job["started_at"] = datetime.now().isoformat()
+    _monitor_job["result"] = None
+    _monitor_job["progress"] = None
+
+    def run_crawl():
+        import concurrent.futures
+        try:
+            db = _get_db()
+            api = DomoAPI(auth)
+            service = MonitorService(api, db)
+
+            # Step 1: Search all dataflows
+            _set_progress("Đang cào danh sách dataflows...", 0, 1)
+            raw_dataflows = service.crawl_all_dataflows()
+            print(f"[CRAWL] Search xong: {len(raw_dataflows)} dataflows")
+
+            # Step 2: Fetch executions in parallel
+            total = len(raw_dataflows)
+            _set_progress("Đang lấy trạng thái thực thi...", 0, total)
+            dataflow_details = []
+            done = 0
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(service.process_dataflow, df): df
+                    for df in raw_dataflows
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    done += 1
+                    if done % 10 == 0 or done == total:
+                        _set_progress("Đang lấy trạng thái thực thi...", done, total)
+                    try:
+                        result = future.result()
+                        if result:
+                            dataflow_details.append(result)
+                    except Exception as e:
+                        print(f"[CRAWL] Process dataflow lỗi: {e}")
+
+            # Step 3: Save to DB
+            _set_progress("Đang lưu vào database...", 0, 1)
+            service.save_dataflows(dataflow_details)
+            print(f"[CRAWL] Lưu xong {len(dataflow_details)} dataflows vào DB")
+
+            # Step 4: Propagate execution state to output datasets
+            _set_progress("Đang cập nhật trạng thái output datasets...", 0, 1)
+            service.propagate_dataflow_status_to_datasets(dataflow_details)
+            print(f"[CRAWL] Propagated dataflow status to output datasets")
+
+            _monitor_job["result"] = {
+                "type": "crawl_dataflows",
+                "summary": {"dataflows": {"total_crawled": len(dataflow_details)}},
+                "checked_at": datetime.now().isoformat(),
+            }
+            db.close()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _monitor_job["result"] = {"error": str(e)}
+        finally:
+            _monitor_job["running"] = False
+            _monitor_job["progress"] = None
+
+    thread = threading.Thread(target=run_crawl, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "Đang cào dataflows..."}
+
+
+
+@router.get("/status")
+def get_check_status():
+    """Xem trạng thái health check hiện tại / gần nhất."""
+    if _monitor_job["running"]:
+        return {
+            "status": "running",
+            "started_at": _monitor_job["started_at"],
+            "progress": _monitor_job.get("progress"),
+        }
+
+    if _monitor_job["result"]:
+        return {
+            "status": "completed",
+            "result": _monitor_job["result"],
+        }
+
+    return {"status": "idle", "message": "Chưa có health check nào chạy."}
+
+
+@router.get("/datasets")
+def list_datasets(
+    provider_type: str = Query(default="", description="Filter theo provider type"),
+    min_card_count: int = Query(default=0, description="Filter dataset >= N cards"),
+    limit: int = Query(default=100, description="Số lượng tối đa"),
+    offset: int = Query(default=0, description="Offset phân trang"),
+):
+    """Danh sách datasets trong DB + trạng thái cập nhật."""
+    db = _get_db()
+
+    where_clauses = ["1=1"]
+    params = []
+
+    if provider_type:
+        where_clauses.append("LOWER(provider_type) = LOWER(%s)")
+        params.append(provider_type)
+
+    if min_card_count > 0:
+        where_clauses.append("card_count >= %s")
+        params.append(min_card_count)
+
+    where_str = " AND ".join(where_clauses)
+
+    # Count total
+    total = db.query_one(
+        f"SELECT COUNT(*) as cnt FROM datasets WHERE {where_str}", params
+    )
+    total_count = total["cnt"] if total else 0
+
+    # Fetch rows
+    params.extend([limit, offset])
+    rows = db.query(
+        f"""SELECT id, name, row_count, column_count, card_count, data_flow_count,
+                   provider_type, stream_id, schedule_state, last_execution_state,
+                   last_updated, updated_at
+            FROM datasets
+            WHERE {where_str}
+            ORDER BY last_updated DESC NULLS LAST
+            LIMIT %s OFFSET %s""",
+        params,
+    )
+
+    db.close()
+
+    return {
+        "total": total_count,
+        "datasets": rows,
+    }
+
+
+@router.get("/dataflows")
+def list_dataflows(
+    status_filter: str = Query(default="", description="Filter theo status (FAILED, SUCCESS...)"),
+    limit: int = Query(default=100, description="Số lượng tối đa"),
+    offset: int = Query(default=0, description="Offset phân trang"),
+):
+    """Danh sách dataflows trong DB + execution gần nhất."""
+    db = _get_db()
+
+    where_clauses = ["1=1"]
+    params = []
+
+    if status_filter:
+        where_clauses.append("UPPER(last_execution_state) = UPPER(%s)")
+        params.append(status_filter)
+
+    where_str = " AND ".join(where_clauses)
+
+    total = db.query_one(
+        f"SELECT COUNT(*) as cnt FROM dataflows WHERE {where_str}", params
+    )
+    total_count = total["cnt"] if total else 0
+
+    params.extend([limit, offset])
+    rows = db.query(
+        f"""SELECT id, name, status, paused, database_type,
+                   last_execution_time, last_execution_state,
+                   execution_count, owner, output_dataset_count, updated_at
+            FROM dataflows
+            WHERE {where_str}
+            ORDER BY last_execution_time DESC NULLS LAST
+            LIMIT %s OFFSET %s""",
+        params,
+    )
+
+    db.close()
+
+    return {
+        "total": total_count,
+        "dataflows": rows,
+    }
+
+
+@router.get("/provider-types")
+def get_provider_types():
+    """Lấy danh sách provider types duy nhất từ datasets đã cào."""
+    db = _get_db()
+    rows = db.query(
+        """SELECT DISTINCT provider_type
+           FROM datasets
+           WHERE provider_type IS NOT NULL AND provider_type != ''
+           ORDER BY provider_type""",
+    )
+    db.close()
+    return {"provider_types": [r["provider_type"] for r in rows]}
+
+
+@router.get("/alerts")
+def get_alerts(limit: int = Query(default=5, description="Số lần check gần nhất")):
+    """Lấy alerts từ các lần check gần nhất."""
+    db = _get_db()
+
+    checks = db.query(
+        """SELECT id, check_type, total_checked, failed_count, stale_count,
+                  ok_count, filters_json, details_json, checked_at
+           FROM monitor_checks
+           ORDER BY checked_at DESC
+           LIMIT %s""",
+        (limit * 2,),  # 2 records per check (dataset + dataflow)
+    )
+
+    db.close()
+
+    # Parse details_json
+    results = []
+    for check in checks:
+        details = []
+        if check.get("details_json"):
+            try:
+                details = json.loads(check["details_json"])
+            except Exception:
+                pass
+
+        results.append({
+            "id": check["id"],
+            "check_type": check["check_type"],
+            "total_checked": check["total_checked"],
+            "failed_count": check["failed_count"],
+            "stale_count": check["stale_count"],
+            "ok_count": check["ok_count"],
+            "filters": json.loads(check["filters_json"]) if check.get("filters_json") else {},
+            "alerts": [a for a in details if a.get("status") in ("failed", "stale", "no_update")],
+            "checked_at": check["checked_at"].isoformat() if check.get("checked_at") else None,
+        })
+
+    return {"checks": results}
+
+
+@router.get("/datasets/{dataset_id}/schedule")
+def get_dataset_schedule(dataset_id: str):
+    """Lấy thông tin schedule của dataset qua Stream API.
+
+    Cần stream_id — tra trong DB hoặc truyền qua query param.
+    """
+    auth = _get_auth()
+    if not auth.is_valid:
+        raise HTTPException(status_code=401, detail="Chưa login.")
+
+    # Tìm stream_id từ DB
+    db = _get_db()
+    row = db.query_one(
+        "SELECT stream_id FROM datasets WHERE id = %s", (dataset_id,)
+    )
+
+    stream_id = None
+    if row and row.get("stream_id"):
+        stream_id = row["stream_id"]
+
+    if not stream_id:
+        # Thử fetch detail để lấy stream_id
+        api = DomoAPI(auth)
+        service = MonitorService(api, db)
+        detail = service.fetch_dataset_detail(dataset_id)
+        if detail and detail.get("stream_id"):
+            stream_id = detail["stream_id"]
+        else:
+            db.close()
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dataset {dataset_id} không có stream_id (có thể là DataFlow output)."
+            )
+
+    api = DomoAPI(auth)
+    service = MonitorService(api, db)
+    schedule = service.fetch_dataset_schedule(stream_id)
+    db.close()
+
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Không tìm thấy schedule info.")
+
+    return schedule
+
+
+@router.get("/dataflows/{dataflow_id}/executions")
+def get_dataflow_executions(
+    dataflow_id: str,
+    limit: int = Query(default=100, description="Số lượng executions tối đa"),
+    offset: int = Query(default=0, description="Offset phân trang"),
+):
+    """Lấy execution history của dataflow."""
+    auth = _get_auth()
+    if not auth.is_valid:
+        raise HTTPException(status_code=401, detail="Chưa login.")
+
+    db = _get_db()
+    api = DomoAPI(auth)
+    service = MonitorService(api, db)
+    executions = service.fetch_dataflow_execution_history(dataflow_id, limit=limit, offset=offset)
+    db.close()
+
+    return {
+        "dataflow_id": dataflow_id,
+        "total": len(executions),
+        "executions": executions,
+    }
+
+
+# ─── Auto-Check + Alerts ─────────────────────────────────
+
+class AutoCheckRequest(BaseModel):
+    """Cấu hình auto-check từ FE."""
+    min_card_count: int = 40
+    comment_ok: str = "【1次データ取得エラー確認結果】\nエラーがなかった旨\n\n【メインDataSetエラー確認結果】\nエラーがなかった旨"
+    alert_email: str = ""
+
+
+@router.post("/auto-check")
+def trigger_auto_check(req: AutoCheckRequest):
+    """Kiểm tra datasets trong DB → post Backlog nếu OK, gửi email nếu có lỗi."""
+    settings = get_settings()
+    db = _get_db()
+
+    try:
+        # ── 1. Query datasets đã crawl ──
+        # 1a. mysql-ssh datasets bị FAILED
+        failed_ssh = db.query(
+            "SELECT id, name, provider_type, last_execution_state, card_count "
+            "FROM datasets WHERE LOWER(provider_type) = 'mysql-ssh' "
+            "AND UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+        )
+
+        # 1b. Datasets có card_count >= N bị FAILED
+        failed_main = db.query(
+            "SELECT id, name, provider_type, last_execution_state, card_count "
+            "FROM datasets WHERE card_count >= %s "
+            "AND UPPER(COALESCE(last_execution_state, '')) = 'FAILED'",
+            (req.min_card_count,)
+        )
+
+        # 1c. Dataflows bị FAILED
+        failed_df = db.query(
+            "SELECT id, name, last_execution_state "
+            "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) = 'FAILED'"
+        )
+
+        # Deduplicate
+        seen = set()
+        all_failed_ds = []
+        for row in (failed_ssh or []) + (failed_main or []):
+            ds_id = str(row.get("id", ""))
+            if ds_id not in seen:
+                seen.add(ds_id)
+                all_failed_ds.append(row)
+
+        all_failed_df = [dict(r) for r in (failed_df or [])]
+
+        has_issues = len(all_failed_ds) > 0 or len(all_failed_df) > 0
+
+        # ── 2. Update alert state ──
+        _alert_data["checked_at"] = datetime.now().isoformat()
+        _alert_data["all_ok"] = not has_issues
+        _alert_data["failed_datasets"] = [dict(r) for r in all_failed_ds]
+        _alert_data["failed_dataflows"] = all_failed_df
+
+        result = {
+            "checked_at": _alert_data["checked_at"],
+            "all_ok": not has_issues,
+            "failed_dataset_count": len(all_failed_ds),
+            "failed_dataflow_count": len(all_failed_df),
+            "backlog_posted": False,
+            "email_sent": False,
+        }
+
+        if not has_issues:
+            # ── 3a. All OK → Post to Backlog ──
+            try:
+                from app.routers.backlog import _load_backlog_cookies
+                cookie_str, _ = _load_backlog_cookies()
+
+                if settings.backlog_issue_id:
+                    import datetime as dt_mod
+                    now = dt_mod.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ".0"
+
+                    url = f"{settings.backlog_base_url}/SwitchStatusAjax.action"
+                    headers = {
+                        "accept": "*/*",
+                        "content-type": "application/x-www-form-urlencoded",
+                        "cache-control": "no-cache",
+                        "x-csrf-token": settings.backlog_csrf_token,
+                        "x-requested-with": "XMLHttpRequest",
+                        "cookie": cookie_str,
+                    }
+                    form_data = {
+                        "switchStatusIssue.id": settings.backlog_issue_id,
+                        "switchStatusIssue.updated": now,
+                        "switchStatusIssue.statusId": "2",
+                        "switchStatusIssue.startDate": "",
+                        "switchStatusIssue.limitDate": "",
+                        "switchStatusIssue.actualHours": "0.0",
+                        "switchStatusIssue.assignerId": "",
+                        "oldSwitchStatusIssue.statusId": "2",
+                        "oldSwitchStatusIssue.startDate": "",
+                        "oldSwitchStatusIssue.limitDate": "",
+                        "oldSwitchStatusIssue.actualHours": "0.0",
+                        "oldSwitchStatusIssue.assignerId": "",
+                        "comment.issueId": settings.backlog_issue_id,
+                        "comment.content": req.comment_ok,
+                    }
+                    resp = http_requests.post(url, headers=headers, data=form_data, timeout=30)
+                    result["backlog_posted"] = resp.status_code < 400
+                    print(f"[AUTO-CHECK] Backlog POST -> {resp.status_code}")
+            except Exception as e:
+                print(f"[AUTO-CHECK] Backlog error: {e}")
+        else:
+            # ── 3b. Has issues → Send email ──
+            if settings.gmail_email and settings.gmail_app_password and req.alert_email:
+                subject = "【Domo監視】データエラー検出"
+                body_lines = ["Domoデータ監視でエラーが検出されました。\n"]
+
+                if all_failed_ds:
+                    body_lines.append("■ エラーDataSet:")
+                    for ds in all_failed_ds:
+                        body_lines.append(f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})")
+
+                if all_failed_df:
+                    body_lines.append("\n■ エラーDataFlow:")
+                    for df in all_failed_df:
+                        body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')})")
+
+                body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
+                body = "\n".join(body_lines)
+
+                result["email_sent"] = send_alert_email(
+                    subject=subject,
+                    body=body,
+                    to_email=req.alert_email,
+                    from_email=settings.gmail_email,
+                    app_password=settings.gmail_app_password,
+                )
+
+        db.close()
+        return result
+
+    except Exception as e:
+        db.close()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/alerts")
+def get_alerts():
+    """Trả về danh sách datasets/dataflows có vấn đề."""
+    return _alert_data
+
+
+@router.get("/auto-check-config")
+def get_auto_check_config():
+    """Trả về config cho FE Settings."""
+    settings = get_settings()
+    # Detect cookie from JSON file
+    try:
+        from app.routers.backlog import _load_backlog_cookies
+        cookie_str, _ = _load_backlog_cookies()
+        has_cookie = bool(cookie_str)
+    except Exception:
+        has_cookie = False
+    return {
+        "backlog_base_url": settings.backlog_base_url,
+        "backlog_issue_id": settings.backlog_issue_id,
+        "has_backlog_cookie": has_cookie,
+        "alert_email_to": settings.alert_email_to,
+        "has_gmail": bool(settings.gmail_email and settings.gmail_app_password),
+    }

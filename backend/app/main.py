@@ -10,12 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.core.db import DomoDatabase
-from app.routers import auth, beastmode
+from app.routers import auth, beastmode, monitor, backlog
 
 app = FastAPI(
     title="DOMO Toolkit",
     description="Quản lý và phân tích Beast Mode, Card, DataFlow trong Domo",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # CORS cho frontend dev server
@@ -35,11 +35,13 @@ app.add_middleware(
 # Routers
 app.include_router(auth.router)
 app.include_router(beastmode.router)
+app.include_router(monitor.router)
+app.include_router(backlog.router)
 
 
 @app.on_event("startup")
 def startup():
-    """Tạo bảng DB khi khởi động + cleanup stale jobs."""
+    """Tạo bảng DB khi khởi động + auto-login nếu có cấu hình."""
     settings = get_settings()
     db = DomoDatabase(
         host=settings.db_host, port=settings.db_port,
@@ -53,6 +55,17 @@ def startup():
     # Hủy các crawl job cũ đang bị treo
     from app.routers.beastmode import cleanup_stale_jobs
     cleanup_stale_jobs()
+
+    # Auto-login nếu có credentials trong .env
+    if settings.domo_username and settings.domo_password:
+        from app.routers.auth import get_auth, _save_session
+        auth_inst = get_auth()
+        result = auth_inst.login(settings.domo_username, settings.domo_password)
+        if result["success"]:
+            _save_session(auth_inst)
+            print(f"✅ Auto-login thành công: {auth_inst.username}")
+        else:
+            print(f"⚠️ Auto-login thất bại: {result['message']}")
 
 
 @app.get("/api/health")
