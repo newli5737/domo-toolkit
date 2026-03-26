@@ -91,8 +91,6 @@ def _save_alert_config(config: dict):
     except Exception as e:
         print(f"[ALERT-CONFIG] Save to DB error: {e}")
 
-_alert_config = _load_alert_config()
-
 
 def _get_db() -> DomoDatabase:
     settings = get_settings()
@@ -101,6 +99,8 @@ def _get_db() -> DomoDatabase:
         dbname=settings.db_name, user=settings.db_user,
         password=settings.db_password,
     )
+
+_alert_config = _load_alert_config()
 
 
 def _get_auth() -> DomoAuth:
