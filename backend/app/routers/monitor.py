@@ -663,8 +663,10 @@ def trigger_auto_check(req: AutoCheckRequest):
         all_failed_df = [dict(r) for r in (failed_df or [])]
 
         has_issues = len(all_failed_ds) > 0 or len(all_failed_df) > 0
+        datasets_ok = len(all_failed_ds) == 0
+        dataflows_failed = len(all_failed_df) > 0
 
-        # ── 2. Update alert state ──
+        # ── 2. ALWAYS update alert state (for /alert page) ──
         _alert_data["checked_at"] = datetime.now().isoformat()
         _alert_data["all_ok"] = not has_issues
         _alert_data["failed_datasets"] = [dict(r) for r in all_failed_ds]
@@ -679,8 +681,8 @@ def trigger_auto_check(req: AutoCheckRequest):
             "email_sent": False,
         }
 
-        if not has_issues:
-            # ── 3a. All OK → Post to Backlog ──
+        # ── 3a. Datasets OK → Post comment to Backlog ──
+        if datasets_ok:
             try:
                 from app.routers.backlog import _load_backlog_cookies
                 cookie_str, _ = _load_backlog_cookies()
@@ -719,32 +721,55 @@ def trigger_auto_check(req: AutoCheckRequest):
                     print(f"[AUTO-CHECK] Backlog POST -> {resp.status_code}")
             except Exception as e:
                 print(f"[AUTO-CHECK] Backlog error: {e}")
-        else:
-            # ── 3b. Has issues → Send email ──
-            if settings.gmail_email and settings.gmail_app_password and req.alert_email:
-                subject = "【Domo監視】データエラー検出"
-                body_lines = ["Domoデータ監視でエラーが検出されました。\n"]
 
-                if all_failed_ds:
-                    body_lines.append("■ エラーDataSet:")
-                    for ds in all_failed_ds:
-                        body_lines.append(f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})")
+        # ── 3b. Dataflows FAILED → Send email alert (independent of dataset status) ──
+        if dataflows_failed and settings.gmail_email and settings.gmail_app_password and req.alert_email:
+            subject = "【Domo監視】DataFlowエラー検出"
+            body_lines = ["DomoデータフローでFAILEDが検出されました。\n"]
 
-                if all_failed_df:
-                    body_lines.append("\n■ エラーDataFlow:")
-                    for df in all_failed_df:
-                        body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')})")
+            body_lines.append(f"■ エラーDataFlow ({len(all_failed_df)}件):")
+            for df in all_failed_df:
+                body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')}, Status: {df.get('last_execution_state', '?')})")
 
-                body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
-                body = "\n".join(body_lines)
+            if all_failed_ds:
+                body_lines.append(f"\n■ エラーDataSet ({len(all_failed_ds)}件):")
+                for ds in all_failed_ds:
+                    body_lines.append(f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, Cards: {ds.get('card_count', 0)})")
 
-                result["email_sent"] = send_alert_email(
-                    subject=subject,
-                    body=body,
-                    to_email=req.alert_email,
-                    from_email=settings.gmail_email,
-                    app_password=settings.gmail_app_password,
+            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
+            body = "\n".join(body_lines)
+
+            result["email_sent"] = send_alert_email(
+                subject=subject,
+                body=body,
+                to_email=req.alert_email,
+                from_email=settings.gmail_email,
+                app_password=settings.gmail_app_password,
+            )
+            print(f"[AUTO-CHECK] Email sent={result['email_sent']} to={req.alert_email}")
+
+        # ── 3c. Datasets FAILED → Also send email ──
+        if len(all_failed_ds) > 0 and settings.gmail_email and settings.gmail_app_password and req.alert_email:
+            subject = "【Domo監視】DataSetエラー検出"
+            body_lines = ["DomoデータセットでFAILEDが検出されました。\n"]
+
+            body_lines.append(f"■ エラーDataSet ({len(all_failed_ds)}件):")
+            for ds in all_failed_ds:
+                body_lines.append(
+                    f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, "
+                    f"Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})"
                 )
+
+            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
+            body = "\n".join(body_lines)
+
+            send_alert_email(
+                subject=subject,
+                body=body,
+                to_email=req.alert_email,
+                from_email=settings.gmail_email,
+                app_password=settings.gmail_app_password,
+            )
 
         db.close()
         return result
