@@ -813,8 +813,10 @@ class BeastModeService:
         )
 
     def _dataset_stats(self) -> list[dict]:
-        """Thống kê BM rác theo dataset."""
-        return self.db.query(
+        """Thống kê BM rác theo dataset, resolve tên từ datasets table."""
+        instance = self.api.auth.instance
+        # Query raw stats by dataset_names (which stores datasource IDs)
+        raw = self.db.query(
             """SELECT dataset_names, COUNT(*) as total,
                       SUM(CASE WHEN group_number = 1 THEN 1 ELSE 0 END) as unused,
                       SUM(CASE WHEN group_number IN (1,2,3) THEN 1 ELSE 0 END) as cleanup_candidates
@@ -824,6 +826,29 @@ class BeastModeService:
                ORDER BY unused DESC
                LIMIT 20"""
         )
+
+        # Resolve dataset names from datasets table
+        results = []
+        for row in raw:
+            ds_id = (row.get("dataset_names") or "").strip().split(",")[0].strip()
+            ds_name = ds_id  # fallback
+            if ds_id:
+                ds_row = self.db.query_one(
+                    "SELECT name FROM datasets WHERE id = %s", (ds_id,)
+                )
+                if ds_row and ds_row.get("name"):
+                    ds_name = ds_row["name"]
+
+            results.append({
+                "dataset_id": ds_id,
+                "dataset_name": ds_name,
+                "url": f"https://{instance}/datasources/{ds_id}" if ds_id else "",
+                "total": row["total"],
+                "unused": row["unused"],
+                "cleanup_candidates": row["cleanup_candidates"],
+            })
+
+        return results
 
     def export_csv(self) -> list[dict]:
         """Lấy toàn bộ data cho CSV export."""

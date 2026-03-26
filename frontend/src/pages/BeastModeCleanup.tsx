@@ -32,7 +32,7 @@ interface Summary {
   duplicates_normalized: { dup_hash: string; cnt: number; bm_ids: number[] }[]
   duplicates_structure: { dup_hash: string; cnt: number; bm_ids: number[] }[]
   duplicates_names: { name: string; cnt: number; bm_ids: number[] }[]
-  top_dirty_datasets: { dataset_names: string; total: number; unused: number; cleanup_candidates: number }[]
+  top_dirty_datasets: { dataset_id: string; dataset_name: string; url: string; total: number; unused: number; cleanup_candidates: number }[]
 }
 
 interface BmRow {
@@ -722,9 +722,15 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                   const pct = Math.round((ds.unused / maxUnused) * 100)
                   return (
                     <div key={i} className="flex items-center gap-3">
-                      <span className="w-40 text-xs text-gray-400 text-right truncate flex-shrink-0">
-                        {ds.dataset_names || 'N/A'}
-                      </span>
+                      <a
+                        href={ds.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-48 text-xs text-[var(--color-accent-cyan)] hover:underline text-right truncate flex-shrink-0"
+                        title={ds.dataset_name || ds.dataset_id}
+                      >
+                        {ds.dataset_name || ds.dataset_id || 'N/A'}
+                      </a>
                       <div className="flex-1 h-6 bg-[var(--color-bg-secondary)] rounded overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-[var(--color-accent-red)] to-[var(--color-accent-orange)] rounded flex items-center pl-2 text-[10px] font-bold text-white transition-all duration-700"
