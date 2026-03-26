@@ -31,6 +31,24 @@ def run_migration():
                 END IF;
             END $$;
         """, "bm_analysis + legacy_id"),
+        ("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='bm_analysis' AND column_name='normalized_hash') THEN
+                    ALTER TABLE bm_analysis ADD COLUMN normalized_hash VARCHAR(12);
+                END IF;
+            END $$;
+        """, "bm_analysis + normalized_hash"),
+        ("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='bm_analysis' AND column_name='structure_hash') THEN
+                    ALTER TABLE bm_analysis ADD COLUMN structure_hash VARCHAR(12);
+                END IF;
+            END $$;
+        """, "bm_analysis + structure_hash"),
     ]
 
     # Datasets table — new columns for monitor

@@ -21,8 +21,7 @@ class BeastModeService:
     SEARCH_URL = "/api/query/v1/functions/search"
     DETAIL_URL = "/api/query/v1/functions/template"
 
-    # Patterns tên có vấn đề
-    BAD_NAME_PATTERNS = ["test", "tmp", "copy", "backup", "old", "sample", "dummy", "コピー", "テスト"]
+
 
     def __init__(self, api: DomoAPI, db: DomoDatabase):
         self.api = api
@@ -297,15 +296,14 @@ class BeastModeService:
 
             group_counts[group] += 1
 
-            # Naming flag
-            naming_flag = self._check_naming(bm["name"] or "")
-
             # Complexity
             complexity = self._calc_complexity(bm.get("expression") or "")
 
-            # Duplicate hash
+            # 3-layer duplicate hash
             expr = (bm.get("expression") or "").strip()
-            dup_hash = hashlib.md5(expr.encode()).hexdigest()[:12] if expr else ""
+            exact_hash = hashlib.md5(expr.encode()).hexdigest()[:12] if expr else ""
+            normalized_hash = hashlib.md5(self._normalize_expr(expr).encode()).hexdigest()[:12] if expr else ""
+            structure_hash = hashlib.md5(self._structure_expr(expr).encode()).hexdigest()[:12] if expr else ""
 
             # Dataset names
             try:
@@ -321,9 +319,11 @@ class BeastModeService:
                 "total_views": total_views,
                 "referenced_by_count": len(refs),
                 "dataset_names": ", ".join(str(d) for d in ds_ids[:5]),
-                "naming_flag": naming_flag,
+                "naming_flag": "",
                 "complexity_score": complexity,
-                "duplicate_hash": dup_hash,
+                "duplicate_hash": exact_hash,
+                "normalized_hash": normalized_hash,
+                "structure_hash": structure_hash,
                 "url": f"https://{self.api.auth.instance}/datacenter/beastmode?id={bm_id}",
                 "legacy_id": bm.get("legacy_id") or "",
             }
@@ -334,11 +334,11 @@ class BeastModeService:
             self.db.execute("TRUNCATE TABLE bm_analysis")
             self.db.bulk_upsert("bm_analysis", results, "bm_id")
 
-        # Thống kê duplicate
-        duplicates = self._find_duplicates()
-
-        # Thống kê per dataset
-        dataset_stats = self._dataset_stats()
+        # Thống kê duplicate (3 tầng)
+        dup_exact = self._find_duplicates("duplicate_hash")
+        dup_normalized = self._find_duplicates("normalized_hash")
+        dup_structure = self._find_duplicates("structure_hash")
+        dup_names = self._find_name_duplicates()
 
         # Log kết quả
         log.info("=" * 40)
@@ -347,16 +347,19 @@ class BeastModeService:
         for g, cnt in group_counts.items():
             pct = (cnt / len(all_bms) * 100) if all_bms else 0
             log.info(f"  Nhóm {g}: {cnt} ({pct:.1f}%)")
-        log.info(f"  Duplicates: {len(duplicates)} groups")
-        log.info(f"  Naming issues: {sum(1 for r in results if r['naming_flag'])}")
+        log.info(f"  Duplicates (exact): {len(dup_exact)} groups")
+        log.info(f"  Duplicates (normalized): {len(dup_normalized)} groups")
+        log.info(f"  Duplicates (structure): {len(dup_structure)} groups")
+        log.info(f"  Duplicate names: {len(dup_names)} groups")
         log.info("=" * 40)
 
         return {
             "total": len(all_bms),
             "groups": group_counts,
-            "duplicates_count": len(duplicates),
-            "naming_issues_count": sum(1 for r in results if r["naming_flag"]),
-            "dataset_stats": dataset_stats[:10],
+            "duplicates_exact": len(dup_exact),
+            "duplicates_normalized": len(dup_normalized),
+            "duplicates_structure": len(dup_structure),
+            "duplicates_names": len(dup_names),
         }
 
     def get_group_data(self, group_number: int, limit: int = 100, offset: int = 0) -> list[dict]:
@@ -407,15 +410,19 @@ class BeastModeService:
         )
         total = self.db.count("bm_analysis")
 
-        duplicates = self._find_duplicates()
-        naming_issues = self.db.count("bm_analysis", "naming_flag IS NOT NULL AND naming_flag != ''")
+        dup_exact = self._find_duplicates("duplicate_hash")
+        dup_normalized = self._find_duplicates("normalized_hash")
+        dup_structure = self._find_duplicates("structure_hash")
+        dup_names = self._find_name_duplicates()
         dataset_stats = self._dataset_stats()
 
         return {
             "total": total,
             "groups": [dict(g) for g in groups],
-            "duplicates": duplicates[:20],
-            "naming_issues_count": naming_issues,
+            "duplicates_exact": dup_exact[:20],
+            "duplicates_normalized": dup_normalized[:20],
+            "duplicates_structure": dup_structure[:20],
+            "duplicates_names": dup_names[:20],
             "top_dirty_datasets": dataset_stats[:10],
         }
 
@@ -734,14 +741,40 @@ class BeastModeService:
 
     # ─── Helpers ──────────────────────────────────────────────
 
-    def _check_naming(self, name: str) -> str:
-        name_lower = name.lower()
-        for pattern in self.BAD_NAME_PATTERNS:
-            if pattern in name_lower:
-                return pattern
-        if len(name) <= 3:
-            return "tên quá ngắn"
-        return ""
+    def _normalize_expr(self, expr: str) -> str:
+        """Tầng 2: Normalize expression — lowercase, collapse whitespace, remove comments, strip backticks."""
+        if not expr:
+            return ""
+        s = expr
+        # Remove block comments /* ... */
+        s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+        # Remove line comments -- ...
+        s = re.sub(r'--[^\n]*', '', s)
+        # Lowercase
+        s = s.lower()
+        # Strip backticks around column names
+        s = s.replace('`', '')
+        # Collapse whitespace
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
+
+    def _structure_expr(self, expr: str) -> str:
+        """Tầng 3: Chỉ giữ cấu trúc logic — thay column names, strings, numbers bằng placeholder."""
+        if not expr:
+            return ""
+        s = self._normalize_expr(expr)
+        # Replace DOMO_BEAST_MODE(id) → BM_REF
+        s = re.sub(r'domo_beast_mode\(\d+\)', 'BM_REF', s)
+        # Replace string literals 'anything' → STR
+        s = re.sub(r"'[^']*'", 'STR', s)
+        # Replace column names (backticks already stripped, so match word-like identifiers
+        # between known SQL tokens). Replace quoted identifiers "name" → COL
+        s = re.sub(r'"[^"]*"', 'COL', s)
+        # Replace numbers (integers and decimals)
+        s = re.sub(r'\b\d+(\.\d+)?\b', 'NUM', s)
+        # Collapse whitespace again
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
 
     def _calc_complexity(self, expression: str) -> int:
         if not expression:
@@ -752,17 +785,31 @@ class BeastModeService:
         score += len(re.findall(r'CASE\s+WHEN', expression, re.IGNORECASE))  # CASE WHEN
         return score
 
-    def _find_duplicates(self) -> list[dict]:
-        """Tìm các nhóm BM có expression giống nhau."""
+    def _find_duplicates(self, hash_column: str = "duplicate_hash") -> list[dict]:
+        """Tìm các nhóm BM có expression giống nhau theo hash column."""
         return self.db.query(
-            """SELECT duplicate_hash, COUNT(*) as cnt,
+            f"""SELECT {hash_column} as dup_hash, COUNT(*) as cnt,
                       ARRAY_AGG(bm_id) as bm_ids
                FROM bm_analysis
-               WHERE duplicate_hash != '' AND duplicate_hash IS NOT NULL
-               GROUP BY duplicate_hash
+               WHERE {hash_column} != '' AND {hash_column} IS NOT NULL
+               GROUP BY {hash_column}
                HAVING COUNT(*) > 1
                ORDER BY cnt DESC
-               LIMIT 50"""
+               LIMIT 100"""
+        )
+
+    def _find_name_duplicates(self) -> list[dict]:
+        """Tìm các BM có cùng tên."""
+        return self.db.query(
+            """SELECT b.name, COUNT(*) as cnt,
+                      ARRAY_AGG(a.bm_id) as bm_ids
+               FROM bm_analysis a
+               JOIN beastmodes b ON a.bm_id = b.id
+               WHERE b.name IS NOT NULL AND b.name != ''
+               GROUP BY b.name
+               HAVING COUNT(*) > 1
+               ORDER BY cnt DESC
+               LIMIT 100"""
         )
 
     def _dataset_stats(self) -> list[dict]:
@@ -785,9 +832,11 @@ class BeastModeService:
                       a.group_number, a.group_label,
                       a.active_cards_count, a.total_views,
                       a.referenced_by_count, a.dataset_names,
-                      a.naming_flag, a.complexity_score,
-                      a.duplicate_hash, a.url
+                      a.complexity_score,
+                      a.duplicate_hash, a.normalized_hash, a.structure_hash,
+                      a.url
                FROM bm_analysis a
                JOIN beastmodes b ON a.bm_id = b.id
                ORDER BY a.group_number, a.total_views DESC"""
         )
+
