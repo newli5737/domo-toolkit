@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost, apiDownload, apiDelete } from '../api'
 import { useI18n } from '../i18n'
 
@@ -112,7 +113,9 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
-  const [activeTab, setActiveTab] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = Number(searchParams.get('tab') || 1)
+  const setActiveTab = (tab: number) => setSearchParams({ tab: String(tab) }, { replace: true })
   const [groupData, setGroupData] = useState<BmRow[]>([])
   const [loadingGroup, setLoadingGroup] = useState(false)
   const [crawling, setCrawling] = useState(false)
