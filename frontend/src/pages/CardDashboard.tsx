@@ -536,14 +536,13 @@ export default function CardDashboard() {
                   </div>
                   {/* Sub-view toggle */}
                   <div className="flex gap-1 ml-auto">
-                    {(['list', 'by-owner', 'by-dashboard', 'by-dataset'] as const).map(v => (
+                    {(['list', 'by-owner', 'by-dataset'] as const).map(v => (
                       <button key={v} onClick={() => setLuView(v)}
                         className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
                           luView === v ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                         }`}>
                         {v === 'list' && <><AlertTriangle className="w-3.5 h-3.5" />{lang === 'vi' ? 'Danh sách' : 'リスト'}</>}
                         {v === 'by-owner' && <><Users className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Owner' : 'Owner別'}</>}
-                        {v === 'by-dashboard' && <><LayoutDashboard className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dashboard' : 'ダッシュボード別'}</>}
                         {v === 'by-dataset' && <><Database className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dataset' : 'Dataset別'}</>}
                       </button>
                     ))}
@@ -693,87 +692,54 @@ export default function CardDashboard() {
                   </div>
                 )}
 
-                {/* ── By Dashboard view ── */}
-                {luView === 'by-dashboard' && (
-                  <div className="card">
-                    <div className="card-header flex items-center gap-2">
-                      <LayoutDashboard className="w-4 h-4 text-amber-500" />
-                      {lang === 'vi' ? 'Phân tích theo Dashboard' : 'ダッシュボード別分析'}
-                    </div>
-                    <div className="card-body">
-                      <div className="space-y-2">
-                        {luData.by_dashboard.map((d, i) => {
-                          const maxCount = luData.by_dashboard[0]?.card_count || 1
-                          const pct = Math.round((d.card_count / maxCount) * 100)
-                          return (
-                            <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:border-amber-200 transition-all">
-                              <span className="text-[10px] font-bold text-slate-400 w-5">{i + 1}</span>
-                              <span className="text-xs font-semibold text-slate-700 flex-1 truncate">{d.page_title}</span>
-                              <div className="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-purple-400 to-amber-400 rounded-full"
-                                  style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-xs font-bold text-amber-600 w-16 text-right">{d.card_count} cards</span>
-                              {d.zero_view_count > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
-                                  {d.zero_view_count} zero
-                                </span>
-                              )}
-                              {domoBase && d.page_id && (
-                                <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
-                                  className="text-blue-500 hover:text-blue-700">
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
+
                 {/* ── By Dataset view ── */}
                 {luView === 'by-dataset' && (
                   <div className="card">
                     <div className="card-header flex items-center gap-2">
                       <Database className="w-4 h-4 text-amber-500" />
-                      {lang === 'vi' ? 'Card ít dùng theo Dashboard/Dataset' : 'Dashboard別 低使用率カード分析'}
+                      {lang === 'vi' ? 'Dataset có nhiều card ít dùng' : 'Dataset別 低使用率カード分析'}
                     </div>
                     <div className="card-body">
                       {!luDataset ? (
                         <div className="text-center py-8 text-slate-400 text-sm">Loading...</div>
+                      ) : (luDataset.by_dashboard || []).length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-sm">
+                          {lang === 'vi'
+                            ? 'Chưa có dữ liệu dataset — Hãy chạy Crawl Cards để cập nhật datasource info.'
+                            : 'データなし — Card クロールを実行してください。'
+                          }
+                        </div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-slate-200 text-left">
+                              <tr className="border-b border-slate-200 text-left text-xs text-slate-500 font-semibold">
                                 <th className="p-2 w-8">#</th>
-                                <th className="p-2">{lang === 'vi' ? 'Dashboard' : 'ダッシュボード'}</th>
+                                <th className="p-2">{lang === 'vi' ? 'Dataset (Datasource)' : 'Dataset'}</th>
                                 <th className="p-2 text-right">{lang === 'vi' ? 'Tổng card' : '合計'}</th>
                                 <th className="p-2 text-right">{lang === 'vi' ? `≤ ${luThreshold} views` : `≤${luThreshold}閲覧`}</th>
                                 <th className="p-2 w-36">{lang === 'vi' ? 'Tỉ lệ' : '割合'}</th>
                                 <th className="p-2 text-right">%</th>
-                                <th className="p-2 w-8"></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {(luDataset.by_dashboard || []).map((d, i) => {
+                              {(luDataset.by_dashboard || []).map((d: any, i: number) => {
                                 const pct = Number(d.low_usage_pct) || 0
                                 const barColor = pct >= 80 ? 'from-red-400 to-red-500'
                                   : pct >= 50 ? 'from-amber-400 to-orange-400'
                                   : 'from-yellow-300 to-amber-400'
+                                const dsName = d.datasource_name || d.datasource_id || '(unknown)'
                                 return (
-                                  <tr key={i} className={`border-b border-slate-50 hover:bg-amber-50/20 transition-colors ${pct >= 80 ? 'bg-red-50/20' : ''}`}>
+                                  <tr key={i} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${pct >= 80 ? 'bg-red-50/20' : ''}`}>
                                     <td className="p-2 text-slate-400 text-xs font-bold">{i + 1}</td>
                                     <td className="p-2">
-                                      {domoBase && d.page_id ? (
-                                        <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
-                                          className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate max-w-[240px] block">
-                                          {d.page_title}
-                                        </a>
-                                      ) : (
-                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[240px] block">{d.page_title}</span>
-                                      )}
+                                      <div>
+                                        <div className="text-xs font-medium text-slate-700 truncate max-w-[260px]">{dsName}</div>
+                                        {d.datasource_id && d.datasource_name && (
+                                          <div className="text-[10px] text-slate-400 font-mono truncate max-w-[260px]">{d.datasource_id}</div>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="p-2 text-xs text-right text-slate-500">{d.total_cards}</td>
                                     <td className="p-2 text-right">
@@ -790,14 +756,6 @@ export default function CardDashboard() {
                                         {pct}%
                                       </span>
                                     </td>
-                                    <td className="p-2">
-                                      {domoBase && d.page_id && (
-                                        <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
-                                          className="text-slate-300 hover:text-blue-500">
-                                          <ExternalLink className="w-3.5 h-3.5" />
-                                        </a>
-                                      )}
-                                    </td>
                                   </tr>
                                 )
                               })}
@@ -808,6 +766,7 @@ export default function CardDashboard() {
                     </div>
                   </div>
                 )}
+
               </>
             )}
           </div>
