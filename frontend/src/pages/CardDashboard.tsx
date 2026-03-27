@@ -53,7 +53,7 @@ export default function CardDashboard() {
 
   const [stats, setStats] = useState<CardStats | null>(null)
   const [types, setTypes] = useState<string[]>([])
-  const [domoBase, setDomoBase] = useState('')
+  const [domoBase, setDomoBase] = useState('https://astecpaints-co-jp.domo.com')
   const [activeTab, setActiveTab] = useState<'cards' | 'dashboards' | 'low-usage'>('cards')
 
   // ─── Cards state ───
