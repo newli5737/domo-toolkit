@@ -65,36 +65,6 @@ def _run_domo_relogin():
         traceback.print_exc()
 
 
-def _run_backlog_relogin():
-    """Re-login Backlog lúc 0h00 mỗi ngày."""
-    print("[SCHEDULER] ⏰ Backlog midnight re-login triggered")
-    try:
-        from app.config import get_settings
-        from app.routers.backlog import get_backlog_auth, _save_backlog_session
-
-        settings = get_settings()
-        email = settings.backlog_email
-        password = settings.backlog_password
-
-        if not email or not password:
-            print("[SCHEDULER] ⚠️ BACKLOG_EMAIL / BACKLOG_PASSWORD chưa cấu hình trong .env, bỏ qua.")
-            return
-
-        bauth = get_backlog_auth()
-        result = bauth.login(email, password)
-        if result["success"]:
-            _save_backlog_session(bauth)
-            print(f"[SCHEDULER] ✅ Backlog re-login thành công!")
-        else:
-            print(f"[SCHEDULER] ❌ Backlog re-login thất bại: {result['message']}")
-    except Exception as e:
-        print(f"[SCHEDULER] ❌ Backlog re-login error: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-# ─── Scheduler lifecycle ──────────────────────────────────────
-
 
 def init_scheduler(config: dict | None = None):
     """Initialize the scheduler on app startup."""
@@ -115,16 +85,6 @@ def init_scheduler(config: dict | None = None):
         replace_existing=True,
     )
     print("[SCHEDULER] ✅ DOMO midnight re-login job đã đăng ký (00:00 JST)")
-
-    # Backlog session chỉ kéo dài 2-4 tiếng → re-login mỗi 2 tiếng
-    _scheduler.add_job(
-        _run_backlog_relogin,
-        trigger=IntervalTrigger(hours=2),
-        id="backlog_interval_relogin",
-        name="Backlog Re-Login (every 2h)",
-        replace_existing=True,
-    )
-    print("[SCHEDULER] ✅ Backlog re-login job đã đăng ký (mỗi 2 tiếng)")
 
     if config is None:
         try:

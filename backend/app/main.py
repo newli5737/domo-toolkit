@@ -76,17 +76,6 @@ def startup():
         else:
             print(f"⚠️ Auto-login DOMO thất bại: {result['message']}")
 
-    # Auto-login Backlog nếu có credentials trong .env
-    if settings.backlog_email and settings.backlog_password:
-        from app.routers.backlog import get_backlog_auth, _save_backlog_session
-        bauth = get_backlog_auth()
-        result = bauth.login(settings.backlog_email, settings.backlog_password)
-        if result["success"]:
-            _save_backlog_session(bauth)
-            print(f"✅ Auto-login Backlog thành công!")
-        else:
-            print(f"⚠️ Auto-login Backlog thất bại: {result['message']}")
-
 
 @app.on_event("shutdown")
 def shutdown():

@@ -27,12 +27,8 @@ class Settings(BaseSettings):
 
     # Backlog
     backlog_base_url: str = "https://mothers-sp.backlog.jp"
-    backlog_cookie: str = ""
     backlog_issue_id: str = ""
-    backlog_csrf_token: str = ""
-    backlog_email: str = ""
-    backlog_password: str = ""
-    backlog_device_key: str = ""   # cookie "device_key" từ browser — bypass reCAPTCHA
+    backlog_api_key: str = ""   # Backlog REST API key — không cần login, không hết hạn
 
     # Email Alert (Gmail SMTP)
     gmail_email: str = ""

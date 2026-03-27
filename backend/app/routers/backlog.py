@@ -1,226 +1,130 @@
-"""Backlog Router — API endpoints cho tích hợp Backlog.
+"""Backlog Router — Dùng Backlog REST API v2 với API key.
 
-Session được quản lý bởi BacklogAuth (HTTP login simulation).
-Không còn đọc cookie từ file JSON.
+Không cần login, không cần cookie, không bao giờ hết hạn.
+Ref: https://developer.nulab.com/docs/backlog/
 """
 
-import json
 import logging
 import requests
-from datetime import datetime
+import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.core.backlog_auth import BacklogAuth
-from app.core.db import DomoDatabase
 
 router = APIRouter(prefix="/api/backlog", tags=["backlog"])
 log = logging.getLogger(__name__)
 
-# ── Global BacklogAuth instance ────────────────────────────────
 
-_backlog_auth: BacklogAuth | None = None
-
-
-def get_backlog_auth() -> BacklogAuth:
-    global _backlog_auth
-    if _backlog_auth is None:
-        settings = get_settings()
-        _backlog_auth = BacklogAuth(
-            backlog_base_url=settings.backlog_base_url,
-            device_key=settings.backlog_device_key,
-        )
-    return _backlog_auth
+def _api_url(settings, path: str) -> str:
+    """Tạo URL REST API kèm apiKey."""
+    return f"{settings.backlog_base_url}/api/v2{path}?apiKey={settings.backlog_api_key}"
 
 
-def get_db() -> DomoDatabase:
-    settings = get_settings()
-    return DomoDatabase(
-        host=settings.db_host, port=settings.db_port,
-        dbname=settings.db_name, user=settings.db_user,
-        password=settings.db_password,
-    )
-
-
-def _save_backlog_session(bauth: BacklogAuth):
-    """Lưu Backlog session vào DB."""
-    try:
-        db = get_db()
-        db.upsert("backlog_sessions", {
-            "id": 1,
-            "cookies_json": json.dumps(bauth.to_dict().get("cookies", {})),
-            "csrf_token": bauth.csrf_token,
-            "logged_in_at": datetime.now().isoformat(),
-            "is_active": True,
-        }, "id")
-        db.close()
-    except Exception as e:
-        log.warning(f"[BACKLOG] Không lưu được session vào DB: {e}")
-
-
-def _load_backlog_session() -> bool:
-    """Tải Backlog session từ DB vào instance."""
-    try:
-        db = get_db()
-        rows = db.query("SELECT * FROM backlog_sessions WHERE is_active = TRUE LIMIT 1")
-        db.close()
-        if not rows:
-            return False
-        row = rows[0]
-        bauth = get_backlog_auth()
-        logged_at = row.get("logged_in_at")
-        bauth.load_from_dict({
-            "cookies": json.loads(row.get("cookies_json") or "{}"),
-            "csrf_token": row.get("csrf_token", ""),
-            "logged_in_at": logged_at.isoformat() if hasattr(logged_at, "isoformat") else logged_at,
-        })
-        return bauth.is_valid
-    except Exception as e:
-        log.warning(f"[BACKLOG] Không load được session từ DB: {e}")
-        return False
-
-
-def _ensure_backlog_session() -> BacklogAuth:
-    """Đảm bảo có session hợp lệ. Tự động login nếu cần."""
-    bauth = get_backlog_auth()
-
-    if bauth.is_valid:
-        return bauth
-
-    # Thử load từ DB
-    if _load_backlog_session():
-        return bauth
-
-    # Login mới
-    settings = get_settings()
-    email = settings.backlog_email
-    password = settings.backlog_password
-
-    if not email or not password:
+def _check_api_key(settings) -> None:
+    if not settings.backlog_api_key:
         raise HTTPException(
             status_code=503,
-            detail="Chưa cấu hình BACKLOG_EMAIL / BACKLOG_PASSWORD trong .env. "
-                   "Hoặc chưa đăng nhập qua /api/backlog/login.",
+            detail="Chưa cấu hình BACKLOG_API_KEY trong .env",
         )
-
-    result = bauth.login(email, password)
-    if not result["success"]:
-        raise HTTPException(status_code=503, detail=f"Backlog login thất bại: {result['message']}")
-
-    _save_backlog_session(bauth)
-    return bauth
 
 
 # ── Models ─────────────────────────────────────────────────────
 
-class BacklogLoginRequest(BaseModel):
-    email: str = ""
-    password: str = ""
-
-
 class BacklogPostRequest(BaseModel):
-    """Request body — chỉ cần comment."""
+    """Request body — comment kèm theo khi đổi status."""
     comment: str = ""
 
 
 # ── Endpoints ──────────────────────────────────────────────────
 
-@router.post("/login")
-def backlog_login(req: BacklogLoginRequest):
-    """Đăng nhập Backlog thủ công (dùng credentials từ request hoặc .env)."""
-    settings = get_settings()
-    email = req.email or settings.backlog_email
-    password = req.password or settings.backlog_password
-
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Thiếu email hoặc password")
-
-    bauth = get_backlog_auth()
-    result = bauth.login(email, password)
-
-    if result["success"]:
-        _save_backlog_session(bauth)
-
-    return {
-        "success": result["success"],
-        "message": result["message"],
-        "csrf_token": bauth.csrf_token if result["success"] else "",
-    }
-
-
 @router.post("/post-status")
 def post_backlog_status(req: BacklogPostRequest):
-    """Post status update lên Backlog issue."""
+    """Đổi status Backlog issue lên In Progress (statusId=2) + thêm comment."""
     settings = get_settings()
+    _check_api_key(settings)
 
     if not settings.backlog_issue_id:
         raise HTTPException(status_code=400, detail="Chưa cấu hình BACKLOG_ISSUE_ID trong .env")
 
-    bauth = _ensure_backlog_session()
+    issue_id = settings.backlog_issue_id
+    errors = []
 
-    url = f"{settings.backlog_base_url}/SwitchStatusAjax.action"
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ".0"
-
-    headers = {
-        "accept": "*/*",
-        "content-type": "application/x-www-form-urlencoded",
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
-        "x-csrf-token": bauth.csrf_token,
-        "x-requested-with": "XMLHttpRequest",
-        "cookie": bauth.cookie_header,
-    }
-
-    form_data = {
-        "switchStatusIssue.id": settings.backlog_issue_id,
-        "switchStatusIssue.updated": now,
-        "switchStatusIssue.statusId": "2",
-        "switchStatusIssue.startDate": "",
-        "switchStatusIssue.limitDate": "",
-        "switchStatusIssue.actualHours": "0.0",
-        "switchStatusIssue.assignerId": "",
-        "oldSwitchStatusIssue.statusId": "2",
-        "oldSwitchStatusIssue.startDate": "",
-        "oldSwitchStatusIssue.limitDate": "",
-        "oldSwitchStatusIssue.actualHours": "0.0",
-        "oldSwitchStatusIssue.assignerId": "",
-        "comment.issueId": settings.backlog_issue_id,
-        "comment.content": req.comment,
-    }
-
+    # ── Bước 1: Update status issue → In Progress (statusId=2) ──
+    patch_url = _api_url(settings, f"/issues/{issue_id}")
     try:
-        resp = requests.post(url, headers=headers, data=form_data, timeout=30)
-        print(f"[BACKLOG] POST {url} -> {resp.status_code}")
-        return {
-            "success": resp.status_code < 400,
-            "status_code": resp.status_code,
-            "response_text": resp.text[:500],
-        }
+        resp = requests.patch(
+            patch_url,
+            json={"statusId": 2},
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        print(f"[BACKLOG] PATCH /issues/{issue_id} → {resp.status_code}")
+        if resp.status_code >= 400:
+            errors.append(f"Update status thất bại: HTTP {resp.status_code} — {resp.text[:200]}")
     except Exception as e:
-        print(f"[BACKLOG] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        errors.append(f"Update status error: {str(e)}")
+
+    # ── Bước 2: Thêm comment nếu có ──
+    comment_result = None
+    if req.comment:
+        comment_url = _api_url(settings, f"/issues/{issue_id}/comments")
+        try:
+            resp2 = requests.post(
+                comment_url,
+                json={"content": req.comment},
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+            print(f"[BACKLOG] POST /issues/{issue_id}/comments → {resp2.status_code}")
+            if resp2.status_code < 400:
+                comment_result = resp2.json()
+            else:
+                errors.append(f"Thêm comment thất bại: HTTP {resp2.status_code} — {resp2.text[:200]}")
+        except Exception as e:
+            errors.append(f"Comment error: {str(e)}")
+
+    return {
+        "success": len(errors) == 0,
+        "errors": errors,
+        "comment": comment_result,
+    }
 
 
 @router.get("/status")
-def backlog_auth_status():
-    """Kiểm tra trạng thái session Backlog hiện tại."""
-    bauth = get_backlog_auth()
-    return {
-        "logged_in": bauth.is_valid,
-        "backlog_base_url": get_settings().backlog_base_url,
-        "has_csrf": bool(bauth.csrf_token),
-    }
+def backlog_api_status():
+    """Kiểm tra kết nối Backlog API."""
+    settings = get_settings()
+    _check_api_key(settings)
+
+    try:
+        # Thử lấy thông tin user hiện tại để xác nhận API key hợp lệ
+        resp = requests.get(
+            _api_url(settings, "/users/myself"),
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            user = resp.json()
+            return {
+                "connected": True,
+                "user": user.get("name", ""),
+                "backlog_base_url": settings.backlog_base_url,
+            }
+        else:
+            return {
+                "connected": False,
+                "error": f"HTTP {resp.status_code}: {resp.text[:200]}",
+            }
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
 
 
 @router.get("/config")
 def get_backlog_config():
     """Lấy cấu hình Backlog hiện tại."""
     settings = get_settings()
-    bauth = get_backlog_auth()
     return {
         "backlog_base_url": settings.backlog_base_url,
         "issue_id": settings.backlog_issue_id,
-        "logged_in": bauth.is_valid,
-        "has_credentials": bool(settings.backlog_email and settings.backlog_password),
+        "has_api_key": bool(settings.backlog_api_key),
     }
