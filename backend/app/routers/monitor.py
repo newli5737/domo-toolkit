@@ -695,44 +695,35 @@ def trigger_auto_check(req: AutoCheckRequest):
             "email_sent": False,
         }
 
-        # ── 3a. Datasets OK → Post comment to Backlog ──
-        if datasets_ok:
+        # ── 3a. Datasets OK → Post comment to Backlog via REST API ──
+        if datasets_ok and settings.backlog_issue_id and settings.backlog_api_key:
             try:
-                from app.routers.backlog import _load_backlog_cookies
-                cookie_str, _ = _load_backlog_cookies()
+                api_key = settings.backlog_api_key
+                issue_id = settings.backlog_issue_id
+                base_url = settings.backlog_base_url
 
-                if settings.backlog_issue_id:
-                    import datetime as dt_mod
-                    now = dt_mod.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ".0"
+                # Update status → In Progress (statusId=2)
+                patch_resp = http_requests.patch(
+                    f"{base_url}/api/v2/issues/{issue_id}?apiKey={api_key}",
+                    json={"statusId": 2},
+                    headers={"Content-Type": "application/json"},
+                    timeout=30,
+                )
+                print(f"[AUTO-CHECK] Backlog PATCH status → {patch_resp.status_code}")
 
-                    url = f"{settings.backlog_base_url}/SwitchStatusAjax.action"
-                    headers = {
-                        "accept": "*/*",
-                        "content-type": "application/x-www-form-urlencoded",
-                        "cache-control": "no-cache",
-                        "x-csrf-token": settings.backlog_csrf_token,
-                        "x-requested-with": "XMLHttpRequest",
-                        "cookie": cookie_str,
-                    }
-                    form_data = {
-                        "switchStatusIssue.id": settings.backlog_issue_id,
-                        "switchStatusIssue.updated": now,
-                        "switchStatusIssue.statusId": "2",
-                        "switchStatusIssue.startDate": "",
-                        "switchStatusIssue.limitDate": "",
-                        "switchStatusIssue.actualHours": "0.0",
-                        "switchStatusIssue.assignerId": "",
-                        "oldSwitchStatusIssue.statusId": "2",
-                        "oldSwitchStatusIssue.startDate": "",
-                        "oldSwitchStatusIssue.limitDate": "",
-                        "oldSwitchStatusIssue.actualHours": "0.0",
-                        "oldSwitchStatusIssue.assignerId": "",
-                        "comment.issueId": settings.backlog_issue_id,
-                        "comment.content": req.comment_ok,
-                    }
-                    resp = http_requests.post(url, headers=headers, data=form_data, timeout=30)
-                    result["backlog_posted"] = resp.status_code < 400
-                    print(f"[AUTO-CHECK] Backlog POST -> {resp.status_code}")
+                # Add comment
+                if req.comment_ok:
+                    comment_resp = http_requests.post(
+                        f"{base_url}/api/v2/issues/{issue_id}/comments?apiKey={api_key}",
+                        json={"content": req.comment_ok},
+                        headers={"Content-Type": "application/json"},
+                        timeout=30,
+                    )
+                    print(f"[AUTO-CHECK] Backlog POST comment → {comment_resp.status_code}")
+                    result["backlog_posted"] = comment_resp.status_code < 400
+                else:
+                    result["backlog_posted"] = patch_resp.status_code < 400
+
             except Exception as e:
                 print(f"[AUTO-CHECK] Backlog error: {e}")
 
