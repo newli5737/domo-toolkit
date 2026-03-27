@@ -133,6 +133,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null)
 
   // Pagination
+  const [lowViewThreshold, setLowViewThreshold] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 50
 
@@ -197,7 +198,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       setSummary(null)
       setCrawlProgress(null)
       connectWs()
-      await apiPost('/api/beastmode/crawl/reanalyze')
+      await apiPost('/api/beastmode/crawl/reanalyze', { low_view_threshold: lowViewThreshold })
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -321,6 +322,18 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                 >
                   ⬇ Export CSV
                 </button>
+                <div className="flex items-center gap-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg px-2 py-1.5">
+                  <label className="text-[10px] text-gray-500 whitespace-nowrap">
+                    {lang === 'ja' ? '低閲覧閾値' : 'Ngưỡng ít xem'}
+                  </label>
+                  <input
+                    type="number" min={1} max={10000}
+                    value={lowViewThreshold}
+                    onChange={e => setLowViewThreshold(Math.max(1, Number(e.target.value)))}
+                    className="w-14 bg-transparent text-sm font-bold text-center outline-none text-[var(--color-accent-orange)]"
+                  />
+                  <span className="text-[10px] text-gray-500">views</span>
+                </div>
                 <button
                   onClick={startReanalyze}
                   disabled={crawling}

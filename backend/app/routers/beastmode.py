@@ -382,7 +382,7 @@ def _run_full_crawl(job_id: int):
         db.close()
 
 
-def _run_view_and_analyze(job_id: int):
+def _run_view_and_analyze(job_id: int, low_view_threshold: int = 10):
     """Background task: chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API)."""
     db = get_db()
     # Dùng dummy auth vì chỉ cần DB, không gọi API
@@ -395,7 +395,7 @@ def _run_view_and_analyze(job_id: int):
     _init_progress(job_id)
 
     log.info("=" * 60)
-    log.info(f"🔄 PHÂN TÍCH LẠI TỪ DB (Job #{job_id})")
+    log.info(f"🔄 PHÂN TÍCH LẠI TỪ DB (Job #{job_id}, low_view_threshold={low_view_threshold})")
     log.info("=" * 60)
 
     try:
@@ -405,9 +405,9 @@ def _run_view_and_analyze(job_id: int):
             (datetime.now(), job_id)
         )
 
-        _update_progress(5, 0, 1, message="Đang phân tích từ DB...")
+        _update_progress(5, 0, 1, message=f"Đang phân tích (threshold={low_view_threshold})...")
 
-        summary = bm_service.analyze()
+        summary = bm_service.analyze(low_view_threshold=low_view_threshold)
         _update_progress(5, 1, 1, status="done")
 
         total_time = time.time() - crawl_start
@@ -561,9 +561,14 @@ async def start_crawl(background_tasks: BackgroundTasks):
     return {"job_id": job_id, "message": "Crawl đã bắt đầu"}
 
 
+class ReanalyzeRequest(BaseModel):
+    low_view_threshold: int = 10
+
+
 @router.post("/crawl/reanalyze")
-async def start_reanalyze(background_tasks: BackgroundTasks):
+async def start_reanalyze(body: ReanalyzeRequest = ReanalyzeRequest(), background_tasks: BackgroundTasks = None):
     """Chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API). KHÔNG CẦN LOGIN."""
+    threshold = max(1, min(body.low_view_threshold, 10000))  # clamp 1–10000
     db = get_db()
 
     db.execute(
@@ -577,10 +582,10 @@ async def start_reanalyze(background_tasks: BackgroundTasks):
     job_id = job["id"]
     db.close()
 
-    log.info(f"📝 Tạo reanalyze job #{job_id}")
-    background_tasks.add_task(_run_view_and_analyze, job_id)
+    log.info(f"📝 Tạo reanalyze job #{job_id} (threshold={threshold})")
+    background_tasks.add_task(_run_view_and_analyze, job_id, threshold)
 
-    return {"job_id": job_id, "message": "Reanalyze đã bắt đầu (View Counts + Phân tích)"}
+    return {"job_id": job_id, "message": f"Reanalyze đã bắt đầu (threshold={threshold})"}
 
 
 @router.post("/crawl/retry-details")
