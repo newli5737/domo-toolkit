@@ -72,19 +72,39 @@ class CardService:
         log.info(f"Crawl cards xong: {len(all_cards)} cards")
         return all_cards
 
+    CARD_PARTS = "parts=viewInfo&parts=datasources"
+
+    def ensure_datasource_columns(self):
+        """Thêm cột datasource_id và datasource_name nếu chưa có."""
+        try:
+            self.db.execute("""
+                ALTER TABLE cards
+                    ADD COLUMN IF NOT EXISTS datasource_id VARCHAR(100),
+                    ADD COLUMN IF NOT EXISTS datasource_name TEXT
+            """)
+            log.info("[✓] cards table: datasource_id, datasource_name columns ready")
+        except Exception as e:
+            log.warn(f"Alter table cards failed: {e}")
+
     def fetch_view_counts(self, card_urns: list[str], batch_size: int = 50,
                           job_id: int = None, progress_callback=None):
-        """Lấy view count cho list card URNs, lưu vào DB."""
+        """Lấy view count + datasource info cho list card URNs, lưu vào DB."""
+        # Đảm bảo DB có cột mới
+        self.ensure_datasource_columns()
+
         total = len(card_urns)
         processed = 0
         updated = 0
         errors = 0
 
-        log.info(f"Bắt đầu fetch view counts cho {total} cards (batch_size={batch_size})")
+        log.info(f"Bắt đầu fetch view counts + datasources cho {total} cards (batch_size={batch_size})")
 
         for i in range(0, total, batch_size):
             batch = card_urns[i:i + batch_size]
-            params = [("parts", "viewInfo")] + [("urns", u) for u in batch]
+            params = (
+                [("parts", "viewInfo"), ("parts", "datasources")]
+                + [("urns", u) for u in batch]
+            )
 
             url = f"{self.CARD_INFO_URL}"
             batch_start = time.time()
@@ -105,21 +125,29 @@ class CardService:
                     for card in cards_data:
                         card_id = card.get("id")
                         view_info = card.get("viewInfo", {})
+                        datasources = card.get("datasources", [])
+                        ds = datasources[0] if datasources else {}
+
                         if card_id:
                             self.db.execute(
-                                """UPDATE cards SET view_count = %s, last_viewed_at = 
-                                   CASE WHEN %s > 0 THEN to_timestamp(%s / 1000.0) ELSE NULL END
+                                """UPDATE cards SET
+                                   view_count = %s,
+                                   last_viewed_at = CASE WHEN %s > 0 THEN to_timestamp(%s / 1000.0) ELSE NULL END,
+                                   datasource_id = %s,
+                                   datasource_name = %s
                                    WHERE id = %s""",
                                 (
                                     view_info.get("totalViewCount", 0),
                                     view_info.get("lastViewedDate", 0),
                                     view_info.get("lastViewedDate", 0),
+                                    ds.get("dataSourceId"),
+                                    ds.get("dataSourceName"),
                                     str(card_id),
                                 )
                             )
                             updated += 1
             except Exception as e:
-                log.error(f"Parse viewInfo lỗi: {e}")
+                log.error(f"Parse viewInfo/datasources lỗi: {e}")
                 errors += 1
 
             processed += len(batch)
@@ -131,7 +159,7 @@ class CardService:
             if progress_callback:
                 progress_callback(processed, total)
 
-            log.progress(processed, total, "View Counts")
+            log.progress(processed, total, "View Counts + Datasources")
             log.debug(f"  API: {api_time:.1f}s | updated: {updated} | errors: {errors}")
 
         log.info(f"Fetch view counts xong: {updated} updated, {errors} errors")

@@ -1,127 +1,92 @@
-import asyncio
+"""migrate_db.py — Chay migration de cap nhat DB schema.
+
+Usage:
+    cd backend
+    python migrate_db.py
+
+Se tu dong doc ket noi tu .env hoac config mac dinh.
+"""
+
 import os
 import sys
+import psycopg2
 
-# Thêm đường dẫn backend vào sys.path để có cấu trúc module
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Doc config tu .env neu co
+def load_env():
+    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_file):
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
 
-from app.core.db import DomoDatabase
-from app.config import get_settings
+load_env()
 
-def run_migration():
-    settings = get_settings()
-    db = DomoDatabase(
-        host=settings.db_host,
-        port=settings.db_port,
-        dbname=settings.db_name,
-        user=settings.db_user,
-        password=settings.db_password
-    )
-    
-    print("Đang migrate database...")
-    migrations = [
-        ("ALTER TABLE bm_card_map ALTER COLUMN card_id TYPE TEXT", "bm_card_map.card_id -> TEXT"),
-        ("ALTER TABLE cards ALTER COLUMN id TYPE TEXT", "cards.id -> TEXT"),
-        ("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                               WHERE table_name='bm_analysis' AND column_name='legacy_id') THEN
-                    ALTER TABLE bm_analysis ADD COLUMN legacy_id TEXT;
-                END IF;
-            END $$;
-        """, "bm_analysis + legacy_id"),
-        ("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                               WHERE table_name='bm_analysis' AND column_name='normalized_hash') THEN
-                    ALTER TABLE bm_analysis ADD COLUMN normalized_hash VARCHAR(12);
-                END IF;
-            END $$;
-        """, "bm_analysis + normalized_hash"),
-        ("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                               WHERE table_name='bm_analysis' AND column_name='structure_hash') THEN
-                    ALTER TABLE bm_analysis ADD COLUMN structure_hash VARCHAR(12);
-                END IF;
-            END $$;
-        """, "bm_analysis + structure_hash"),
-    ]
+DB_CONFIG = {
+    "host":     os.getenv("DB_HOST", "localhost"),
+    "port":     int(os.getenv("DB_PORT", "5432")),
+    "dbname":   os.getenv("DB_NAME", "DOMO"),
+    "user":     os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", "test1234"),
+}
 
-    # Datasets table — new columns for monitor
-    dataset_new_cols = [
-        ("column_count", "INTEGER DEFAULT 0"),
-        ("data_flow_count", "INTEGER DEFAULT 0"),
-        ("provider_type", "TEXT"),
-        ("stream_id", "TEXT"),
-        ("schedule_state", "TEXT"),
-        ("updated_at", "TIMESTAMP DEFAULT NOW()"),
-    ]
-    for col_name, col_type in dataset_new_cols:
-        migrations.append((f"""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                               WHERE table_name='datasets' AND column_name='{col_name}') THEN
-                    ALTER TABLE datasets ADD COLUMN {col_name} {col_type};
-                END IF;
-            END $$;
-        """, f"datasets + {col_name}"))
+MIGRATIONS = [
+    # v1: them datasource_id, datasource_name vao bang cards
+    (
+        "v1_cards_datasource",
+        """
+        ALTER TABLE cards
+            ADD COLUMN IF NOT EXISTS datasource_id   VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS datasource_name TEXT;
+        """,
+    ),
+    # v2: index cho datasource_id de query nhanh hon
+    (
+        "v2_cards_datasource_index",
+        """
+        CREATE INDEX IF NOT EXISTS idx_cards_datasource_id
+            ON cards(datasource_id);
+        """,
+    ),
+]
 
-    # Dataflows table
-    migrations.append(("""
-        CREATE TABLE IF NOT EXISTS dataflows (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            status TEXT,
-            paused BOOLEAN DEFAULT FALSE,
-            database_type TEXT,
-            last_execution_time TIMESTAMP,
-            last_execution_state TEXT,
-            execution_count INTEGER DEFAULT 0,
-            owner TEXT,
-            output_dataset_count INTEGER DEFAULT 0,
-            updated_at TIMESTAMP DEFAULT NOW()
-        )
-    """, "CREATE dataflows"))
 
-    # Monitor checks table
-    migrations.append(("""
-        CREATE TABLE IF NOT EXISTS monitor_checks (
+def run_migrations():
+    print(f"Connecting to {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']} ...")
+    conn = psycopg2.connect(**DB_CONFIG)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    # Tao bang migration_log neu chua co
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS migration_log (
             id SERIAL PRIMARY KEY,
-            check_type TEXT NOT NULL,
-            total_checked INTEGER DEFAULT 0,
-            failed_count INTEGER DEFAULT 0,
-            stale_count INTEGER DEFAULT 0,
-            ok_count INTEGER DEFAULT 0,
-            filters_json TEXT,
-            details_json TEXT,
-            checked_at TIMESTAMP DEFAULT NOW()
+            name VARCHAR(200) UNIQUE NOT NULL,
+            applied_at TIMESTAMPTZ DEFAULT NOW()
         )
-    """, "CREATE monitor_checks"))
+    """)
 
-    # App settings table — key-value store for persistent config
-    migrations.append(("""
-        CREATE TABLE IF NOT EXISTS app_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT NOW()
-        )
-    """, "CREATE app_settings"))
+    for name, sql in MIGRATIONS:
+        # Kiem tra da chay chua
+        cur.execute("SELECT 1 FROM migration_log WHERE name = %s", (name,))
+        if cur.fetchone():
+            print(f"  [SKIP] {name} (already applied)")
+            continue
 
-    for sql, label in migrations:
         try:
-            db.execute(sql)
-            print(f"  [OK] {label}")
+            print(f"  [RUN]  {name} ...")
+            cur.execute(sql)
+            cur.execute("INSERT INTO migration_log(name) VALUES(%s)", (name,))
+            print(f"  [OK]   {name}")
         except Exception as e:
-            print(f"  [WARN] {label}: {e}")
+            print(f"  [ERR]  {name}: {e}", file=sys.stderr)
 
-    db.close()
-    print("Migration done!")
+    cur.close()
+    conn.close()
+    print("Done.")
+
 
 if __name__ == "__main__":
-    run_migration()
-
+    run_migrations()

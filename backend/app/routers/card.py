@@ -289,21 +289,24 @@ def get_low_usage_cards(
         db.close()
 
 
-
 @router.get("/low-usage-by-dataset")
 def get_low_usage_by_dataset(
     max_views: int = Query(default=10, description="Nguong view toi da de coi la it dung"),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    """Phan tich card it su dung nhom theo dashboard/dataset."""
+    """Phan tich card it su dung nhom theo DATASET (datasource_id/datasource_name).
+
+    Sau khi chay crawl cards voi parts=datasources, cot datasource_id va
+    datasource_name se co san trong bang cards.
+    """
     db = _get_db()
     try:
-        # Nhom cards theo page (dashboard) va tinh so card it dung, ti le
-        by_dashboard = db.query(
+        # Group theo datasource (dataset thuc su ve ra card)
+        by_dataset = db.query(
             """
             SELECT
-                page_title,
-                page_id,
+                datasource_id,
+                datasource_name,
                 COUNT(*) as total_cards,
                 COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) as low_usage_count,
                 COALESCE(SUM(view_count), 0) as total_views,
@@ -313,8 +316,8 @@ def get_low_usage_by_dataset(
                     1
                 ) as low_usage_pct
             FROM cards
-            WHERE page_title IS NOT NULL
-            GROUP BY page_title, page_id
+            WHERE datasource_id IS NOT NULL
+            GROUP BY datasource_id, datasource_name
             HAVING COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) > 0
             ORDER BY low_usage_count DESC, total_cards DESC
             LIMIT %s
@@ -322,23 +325,37 @@ def get_low_usage_by_dataset(
             [max_views, max_views, max_views, limit],
         )
 
-        # Dataset stats tu bang datasets (card_count co san)
-        datasets = db.query(
-            """
-            SELECT id as dataset_id, name as dataset_name, provider_type,
-                   card_count as total_cards, row_count, last_updated
-            FROM datasets
-            WHERE card_count IS NOT NULL AND card_count > 0
-            ORDER BY card_count DESC
-            LIMIT %s
-            """,
-            [limit],
-        )
+        # Fallback: neu datasource_id chua duoc crawl (column chua co),
+        # thi group theo page_title (dashboard) nhu cu
+        has_datasource = any(r.get("datasource_id") for r in (by_dataset or []))
+        if not has_datasource:
+            by_dataset = db.query(
+                """
+                SELECT
+                    page_id as datasource_id,
+                    page_title as datasource_name,
+                    COUNT(*) as total_cards,
+                    COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) as low_usage_count,
+                    COALESCE(SUM(view_count), 0) as total_views,
+                    ROUND(
+                        COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END)::numeric
+                        / NULLIF(COUNT(*), 0) * 100,
+                        1
+                    ) as low_usage_pct
+                FROM cards
+                WHERE page_title IS NOT NULL
+                GROUP BY page_id, page_title
+                HAVING COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) > 0
+                ORDER BY low_usage_count DESC, total_cards DESC
+                LIMIT %s
+                """,
+                [max_views, max_views, max_views, limit],
+            )
 
         return {
             "max_views_threshold": max_views,
-            "by_dashboard": [dict(r) for r in (by_dashboard or [])],
-            "datasets": [dict(r) for r in (datasets or [])],
+            "has_datasource_data": has_datasource,
+            "by_dashboard": [dict(r) for r in (by_dataset or [])],
         }
     finally:
         db.close()
