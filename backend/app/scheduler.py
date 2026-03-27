@@ -1,4 +1,6 @@
-"""Scheduler — APScheduler cron job for auto-check datasets & dataflows."""
+"""Scheduler — APScheduler cron jobs for auto-check datasets & dataflows,
+DOMO midnight re-login, và Backlog midnight re-login.
+"""
 
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,6 +15,9 @@ DAY_MAP = {
     "mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
     "fri": "fri", "sat": "sat", "sun": "sun",
 }
+
+
+# ─── Job functions ────────────────────────────────────────────
 
 
 def _run_auto_check():
@@ -34,6 +39,62 @@ def _run_auto_check():
         traceback.print_exc()
 
 
+def _run_domo_relogin():
+    """Re-login DOMO lúc 0h00 mỗi ngày — session chỉ có hiệu lực 1 ngày."""
+    print("[SCHEDULER] ⏰ DOMO midnight re-login triggered")
+    try:
+        from app.config import get_settings
+        from app.routers.auth import get_auth, _save_session
+
+        settings = get_settings()
+        if not settings.domo_username or not settings.domo_password:
+            print("[SCHEDULER] ⚠️ DOMO credentials chưa cấu hình trong .env, bỏ qua.")
+            return
+
+        auth = get_auth()
+        result = auth.login(settings.domo_username, settings.domo_password)
+        if result["success"]:
+            _save_session(auth)
+            print(f"[SCHEDULER] ✅ DOMO re-login thành công: {auth.username}")
+        else:
+            print(f"[SCHEDULER] ❌ DOMO re-login thất bại: {result['message']}")
+    except Exception as e:
+        print(f"[SCHEDULER] ❌ DOMO re-login error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _run_backlog_relogin():
+    """Re-login Backlog lúc 0h00 mỗi ngày."""
+    print("[SCHEDULER] ⏰ Backlog midnight re-login triggered")
+    try:
+        from app.config import get_settings
+        from app.routers.backlog import get_backlog_auth, _save_backlog_session
+
+        settings = get_settings()
+        email = settings.backlog_email
+        password = settings.backlog_password
+
+        if not email or not password:
+            print("[SCHEDULER] ⚠️ BACKLOG_EMAIL / BACKLOG_PASSWORD chưa cấu hình trong .env, bỏ qua.")
+            return
+
+        bauth = get_backlog_auth()
+        result = bauth.login(email, password)
+        if result["success"]:
+            _save_backlog_session(bauth)
+            print(f"[SCHEDULER] ✅ Backlog re-login thành công!")
+        else:
+            print(f"[SCHEDULER] ❌ Backlog re-login thất bại: {result['message']}")
+    except Exception as e:
+        print(f"[SCHEDULER] ❌ Backlog re-login error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# ─── Scheduler lifecycle ──────────────────────────────────────
+
+
 def init_scheduler(config: dict | None = None):
     """Initialize the scheduler on app startup."""
     global _scheduler
@@ -43,6 +104,25 @@ def init_scheduler(config: dict | None = None):
     _scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
     _scheduler.start()
     print("[SCHEDULER] 🚀 Scheduler started (Asia/Tokyo)")
+
+    # ── Midnight re-login jobs (0h00 JST mỗi ngày) ──
+    _scheduler.add_job(
+        _run_domo_relogin,
+        trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Tokyo"),
+        id="domo_midnight_relogin",
+        name="DOMO Midnight Re-Login",
+        replace_existing=True,
+    )
+    print("[SCHEDULER] ✅ DOMO midnight re-login job đã đăng ký (00:00 JST)")
+
+    _scheduler.add_job(
+        _run_backlog_relogin,
+        trigger=CronTrigger(hour=0, minute=1, timezone="Asia/Tokyo"),
+        id="backlog_midnight_relogin",
+        name="Backlog Midnight Re-Login",
+        replace_existing=True,
+    )
+    print("[SCHEDULER] ✅ Backlog midnight re-login job đã đăng ký (00:01 JST)")
 
     if config is None:
         try:
@@ -55,7 +135,7 @@ def init_scheduler(config: dict | None = None):
 
 
 def update_schedule(config: dict):
-    """Update or create the cron job based on config."""
+    """Update or create the auto-check cron job based on config."""
     global _scheduler
     if _scheduler is None:
         return

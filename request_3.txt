@@ -1,0 +1,60 @@
+POST https://beacons.gcp.gvt2.com/domainreliability/upload HTTP/2.0
+content-length: 939
+content-type: application/json; charset=utf-8
+user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+accept-encoding: gzip, deflate, br, zstd
+accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5
+priority: u=4, i
+JSON
+ 
+ 
+{
+    "entries": [
+        {
+            "failure_data": {
+                "custom_error": "net::ERR_ABORTED"
+            },
+            "http_response_code": 200,
+            "network_changed": false,
+            "protocol": "QUIC",
+            "request_age_ms": 720283,
+            "request_elapsed_ms": 86,
+            "sample_rate": 1.0,
+            "server_ip": "",
+            "status": "aborted",
+            "url": "https://beacons.gcp.gvt2.com/domainreliability/upload",
+            "was_proxied": false
+        },
+        {
+            "failure_data": {
+                "custom_error": "net::ERR_ABORTED"
+            },
+            "http_response_code": 200,
+            "network_changed": false,
+            "protocol": "QUIC",
+            "request_age_ms": 243958,
+            "request_elapsed_ms": 80,
+            "sample_rate": 1.0,
+            "server_ip": "",
+            "status": "aborted",
+            "url": "https://beacons.gcp.gvt2.com/domainreliability/upload",
+            "was_proxied": false
+        },
+        {
+            "failure_data": {
+                "custom_error": "net::ERR_ABORTED"
+            },
+            "http_response_code": 200,
+            "network_changed": false,
+            "protocol": "QUIC",
+            "request_age_ms": 243961,
+            "request_elapsed_ms": 83,
+            "sample_rate": 1.0,
+            "server_ip": "",
+            "status": "aborted",
+            "url": "https://beacons.gcp.gvt2.com/domainreliability/upload",
+            "was_proxied": false
+        }
+    ],
+    "reporter": "chrome"
+}

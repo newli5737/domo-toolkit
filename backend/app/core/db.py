@@ -129,6 +129,15 @@ class DomoDatabase:
             is_active BOOLEAN DEFAULT TRUE
         """)
 
+        # Session Backlog
+        self.ensure_table("backlog_sessions", """
+            id SERIAL PRIMARY KEY,
+            cookies_json TEXT,
+            csrf_token TEXT,
+            logged_in_at TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE
+        """)
+
         # Beast Modes
         self.ensure_table("beastmodes", """
             id BIGINT PRIMARY KEY,

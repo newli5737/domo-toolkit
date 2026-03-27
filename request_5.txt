@@ -1,0 +1,35 @@
+POST https://apps.nulab.com/signin HTTP/2.0
+content-length: 2703
+cache-control: max-age=0
+sec-ch-ua: "Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Windows"
+origin: https://apps.nulab.com
+content-type: application/x-www-form-urlencoded
+upgrade-insecure-requests: 1
+user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36
+accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site: same-origin
+sec-fetch-mode: navigate
+sec-fetch-user: ?1
+sec-fetch-dest: document
+referer: https://apps.nulab.com/signin
+accept-encoding: gzip, deflate, br, zstd
+accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5
+cookie: device_key=c9a9e0c2cdf1330ba795688cf91c3bb0a8ec6c2b
+cookie: cookie-storage-check=1
+cookie: JSESSIONID=NTA4NzY4YzUtMzA2Ni00ODQ5LWFhZDQtN2UxZGQ0MGFkOWYz
+cookie: mp_1105bf66dd4dcbec09009ba91157a9be_mixpanel=%7B%22distinct_id%22%3A%22%24device%3Ab27d6039-c7d0-4c30-9d36-9806e5bad539%22%2C%22%24device_id%22%3A%22b27d6039-c7d0-4c30-9d36-9806e5bad539%22%2C%22%24initial_referrer%22%3A%22https%3A%2F%2Fapps.nulab.com%2Fsignin%2Foauth%3Fscope%3Dnulab%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Fmothers-sp.backlog.jp%252FNulabAccountAuthenticationCallback.action%253Furl%253D%25252Fboard%25252FGINADREP%25253Fassignee%25253D1074602035%26state%3Dn8evRgibJj%26client_id%3Dmothers-sp.backlog.jp%22%2C%22%24initial_referring_domain%22%3A%22apps.nulab.com%22%2C%22__mps%22%3A%7B%7D%2C%22__mpso%22%3A%7B%22%24initial_referrer%22%3A%22https%3A%2F%2Fapps.nulab.com%2Fsignin%2Foauth%3Fscope%3Dnulab%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Fmothers-sp.backlog.jp%252FNulabAccountAuthenticationCallback.action%253Furl%253D%25252Fboard%25252FGINADREP%25253Fassignee%25253D1074602035%26state%3Dn8evRgibJj%26client_id%3Dmothers-sp.backlog.jp%22%2C%22%24initial_referring_domain%22%3A%22apps.nulab.com%22%7D%2C%22__mpus%22%3A%7B%7D%2C%22__mpa%22%3A%7B%7D%2C%22__mpu%22%3A%7B%7D%2C%22__mpr%22%3A%5B%5D%2C%22__mpap%22%3A%5B%5D%7D
+priority: u=0, i
+URLEncoded form
+ 
+ 
+_csrf:                036efcc8-c5eb-4bd6-ab1f-ba9d6094776a
+contact_me:           
+email:                lai.the.ngoc.gina@astecpaints.co.jp
+autoSigninWebAuthn:   on
+password:             laingoc1509
+g-recaptcha-response: 0cAFcWeA5g1Sg9WeJBLVW6ciI1tPgY5NyCHm8iNiXL05xpqkni1F5ZGr8__Ll9aZUEywC8YJy9f2xWvd69hzzgmKvu7KaUfj7n-s7nW7csvsk7WDmgdIcC7FFo9oAZbR7JgwFPDGF-x1kNixEmOA-WkbHllSnt1XkfNkTGgkzw8uc0uolIMvZdy6mWimoZy-OZSGrOezL_BXAzHmD9hALnDyI2MweB49bip-0_JgOXz3n8KzthZz-DR_3hIPxkToc3eB8GM8b4uDE0eq65RVdbT-xW5DuJfnGPQesY8XqXlNagMMdwwrbhJiolz1r-PfHKyKN-WkrWFUWE0WSgjcDIWKsqj1UrxXUa-rBj3WDIuG7dXj-srAkXkUps7v6F-h3fF1ebHB9ShNLxuNUwVt--lDMNPdoQ6GVI99VQlu7EXJyS9OIsp8scA7VubwNHLsvz_G7QeMfsuCNCnw2IAQcLyI67HgezUbsmtodseRABU2r_ewWOQ4JgZ9PJB0GSk49TgLJbyyNclRoNlUCT7IKuZ9IvG-jnvR3aEJy1ql0bGPZKOyAdDyWTgPDDpbsEE4FEmmdGScayukEgpVbVhGOTKd3j1qjYUVRfR5ZRr4HOwvf8hzRav0lTkCKau_YJNAbE8w2SKrpaWTSveEeii3reXoBuM6Nctqx-yqq8oDDdBeoESiYtfZQ1wfcwbX5aeSjvccDP2a9Uyf_Myc3URJRXsX4he1gdVGW01Qu0hb0mUylMSAWL4JdKv6M2aDrKLlHtux_O-W_wNi_Ymv-m3-ypIPF0X4pIx9zbeHlTQu3s5aSLUKKOERlSczFpI0KHg3YZ8kHH0g9uzbdUUz6NNt_9o414gQoMm9VVUOet4Dttqbc6gMEse7NFtv-Fv0eV3oxgxNf8g7gm7qVxdctq1fI-SHgFvnYEm1rC6mCK9WF4J_aTHLKG-jwpHyWH41YEc2SPoPzMu0i061kSBCUeidUh_VqLk3Outr8ZUYRUgXOeqP5-WPHeVS8KGj8y66faEyBtpHMZqKze3nRrhtAs5owCyn0qCrG7AFZahofqgA9HhiwQ9xIsf8myIYEn7fbLlBCQZKf0S951hZVDm05e0MSrCanL1Sd7Qwa6ZQNl9nbtxQjpX3firTAY3JzOCCuN7Xe_yaPhXoz-tNJV4cbFMC1CL82VohxGBCQ_TIGpDgVGBBTEnEvmvy7ueFIPjfLOazWQ9nPiISDqQEGRr9Blb2GfgsLBb2AOlLFfhBQcLdqpUAD5h71YJmzE8AAl2iCXb35IrthbVpdDsCo_53FXwRt_yxNZKMGXiEHRY6Tgdy09n2DRJ4X-6nooe9e8L901CbdOlD5q-FU0FHCNRMLbsfbN6KNOuCGWoc8d4Fm4Pjadkzl9XyOSupXOoUWpYrEtAB7BobRG7kU2jDuk0frNx3ocdHrnEU-sOdETUm5muXCrpPNEqOmm-mO4h9ePUTpG7cf7_gNvWP_1ZZu7gsiUjkemqCg_l6diHJXocpcLJ9rgxczMCqAhB4zFvxAajtd4ChxEoaA-39C4l-mH7ioW5OrrLbFtKHS1wlcLoN_33SPqtahFkj4H08_F-DJgIzsWhj1XoBf1f3-S5TeKs6nUbUu9wj560u07DdmjwNIOobMU4QejRaxAf79paKGhxLCCvvXSnpdod1MmbNQ7bi1819xjkxG6eOS2-7sd8VBpwtvBvn79TapyitZOWSRCBxCeQkV9lC16iEbm6dNeyeGO-oJJT2wkH9BNoz0TpIl3DNsXGLxesTJxIl-IDBgZRr4NpvX9Qb7BqFqI7e8uLyCLZmgST1UE25IOyishXc96FDpGAFqSOxyNqQP1JfTmbVoMbeI_zGjhdQMNqx9KX__rruYptX83_CNRfG2nU-oD2gS_8SwRBjzyK1cIGhze7vGYVY_SE8wPHzr01Be3GHkBY3mvLQwN_e9AWNYTRD-zOaV2VDQyd9O8QXtr6mQgBJk5Gg3Yj725YwWvvZCESwPnNKT7t4TFzpz66ruyPvfKn3jpAyv3M4TWFLOwdXZyrL1mZbeJIVpaq4z1GjKHEsIiWqCbkS1nDUHLYi2wnl7OFacxBHKolOdJvVCnzfPPFtne3hjCR4sryd-hUPk8DRNis2fcml7yngSJZOmGW9-ItDmHYsBVgQdJlgcCLWN4MEXq7MStdsnQLXPFDJ3N84mmkP17CemeAMimSC03k1h-lWpoQWxzqgH8xAvKIYWnVFheu-D3ODSTtYwkiXaLa6iT5OoslERj2qH5qE9zhIKFdwOhvZIEadXnxJipFlur3SmKlzCBviNbKiJE2aCx9cEH_U4epyum79Kq7xgiRmKL-POIow7od6Rfmn4yV_9kLlOUvQHw57udrCqZbRVz38cZYOeEli6mEPGpzClK6w
+autoSignin:           on
+mixpanelDistinctId:   $device:b27d6039-c7d0-4c30-9d36-9806e5bad539
+mixpanelDeviceId:     b27d6039-c7d0-4c30-9d36-9806e5bad539

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     backlog_cookie: str = ""
     backlog_issue_id: str = ""
     backlog_csrf_token: str = ""
+    backlog_email: str = ""
+    backlog_password: str = ""
 
     # Email Alert (Gmail SMTP)
     gmail_email: str = ""

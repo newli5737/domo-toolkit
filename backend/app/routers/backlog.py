@@ -1,53 +1,119 @@
-"""Backlog Router — API endpoints cho tích hợp Backlog."""
+"""Backlog Router — API endpoints cho tích hợp Backlog.
+
+Session được quản lý bởi BacklogAuth (HTTP login simulation).
+Không còn đọc cookie từ file JSON.
+"""
 
 import json
-import glob
-import os
+import logging
 import requests
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
 from app.config import get_settings
+from app.core.backlog_auth import BacklogAuth
+from app.core.db import DomoDatabase
 
 router = APIRouter(prefix="/api/backlog", tags=["backlog"])
+log = logging.getLogger(__name__)
 
-# Cookie file directory (same location as the backend)
-COOKIE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ── Global BacklogAuth instance ────────────────────────────────
+
+_backlog_auth: BacklogAuth | None = None
 
 
-def _load_backlog_cookies() -> tuple[str, str]:
-    """Load cookies from exported browser JSON file.
-    Returns (cookie_header_string, csrf_token).
-    """
-    # Find the latest backlog cookie JSON file
-    pattern = os.path.join(COOKIE_DIR, "mothers-sp.backlog.jp*.json")
-    files = glob.glob(pattern)
-    if not files:
-        raise HTTPException(status_code=400, detail=f"Không tìm thấy file cookie Backlog tại {COOKIE_DIR}")
+def get_backlog_auth() -> BacklogAuth:
+    global _backlog_auth
+    if _backlog_auth is None:
+        settings = get_settings()
+        _backlog_auth = BacklogAuth(backlog_base_url=settings.backlog_base_url)
+    return _backlog_auth
 
-    # Use the latest file
-    latest_file = max(files, key=os.path.getmtime)
-    print(f"[BACKLOG] Loading cookies from: {latest_file}")
 
-    with open(latest_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
+def get_db() -> DomoDatabase:
+    settings = get_settings()
+    return DomoDatabase(
+        host=settings.db_host, port=settings.db_port,
+        dbname=settings.db_name, user=settings.db_user,
+        password=settings.db_password,
+    )
 
-    cookies = data.get("cookies", [])
-    if not cookies:
-        raise HTTPException(status_code=400, detail="File cookie rỗng")
 
-    # Build cookie header string
-    cookie_parts = []
-    csrf_token = ""
-    for c in cookies:
-        name = c.get("name", "")
-        value = c.get("value", "")
-        if name and value:
-            cookie_parts.append(f"{name}={value}")
+def _save_backlog_session(bauth: BacklogAuth):
+    """Lưu Backlog session vào DB."""
+    try:
+        db = get_db()
+        db.upsert("backlog_sessions", {
+            "id": 1,
+            "cookies_json": json.dumps(bauth.to_dict().get("cookies", {})),
+            "csrf_token": bauth.csrf_token,
+            "logged_in_at": datetime.now().isoformat(),
+            "is_active": True,
+        }, "id")
+        db.close()
+    except Exception as e:
+        log.warning(f"[BACKLOG] Không lưu được session vào DB: {e}")
 
-    cookie_str = "; ".join(cookie_parts)
-    return cookie_str, csrf_token
+
+def _load_backlog_session() -> bool:
+    """Tải Backlog session từ DB vào instance."""
+    try:
+        db = get_db()
+        rows = db.query("SELECT * FROM backlog_sessions WHERE is_active = TRUE LIMIT 1")
+        db.close()
+        if not rows:
+            return False
+        row = rows[0]
+        bauth = get_backlog_auth()
+        logged_at = row.get("logged_in_at")
+        bauth.load_from_dict({
+            "cookies": json.loads(row.get("cookies_json") or "{}"),
+            "csrf_token": row.get("csrf_token", ""),
+            "logged_in_at": logged_at.isoformat() if hasattr(logged_at, "isoformat") else logged_at,
+        })
+        return bauth.is_valid
+    except Exception as e:
+        log.warning(f"[BACKLOG] Không load được session từ DB: {e}")
+        return False
+
+
+def _ensure_backlog_session() -> BacklogAuth:
+    """Đảm bảo có session hợp lệ. Tự động login nếu cần."""
+    bauth = get_backlog_auth()
+
+    if bauth.is_valid:
+        return bauth
+
+    # Thử load từ DB
+    if _load_backlog_session():
+        return bauth
+
+    # Login mới
+    settings = get_settings()
+    email = settings.backlog_email
+    password = settings.backlog_password
+
+    if not email or not password:
+        raise HTTPException(
+            status_code=503,
+            detail="Chưa cấu hình BACKLOG_EMAIL / BACKLOG_PASSWORD trong .env. "
+                   "Hoặc chưa đăng nhập qua /api/backlog/login.",
+        )
+
+    result = bauth.login(email, password)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=f"Backlog login thất bại: {result['message']}")
+
+    _save_backlog_session(bauth)
+    return bauth
+
+
+# ── Models ─────────────────────────────────────────────────────
+
+class BacklogLoginRequest(BaseModel):
+    email: str = ""
+    password: str = ""
 
 
 class BacklogPostRequest(BaseModel):
@@ -55,27 +121,52 @@ class BacklogPostRequest(BaseModel):
     comment: str = ""
 
 
+# ── Endpoints ──────────────────────────────────────────────────
+
+@router.post("/login")
+def backlog_login(req: BacklogLoginRequest):
+    """Đăng nhập Backlog thủ công (dùng credentials từ request hoặc .env)."""
+    settings = get_settings()
+    email = req.email or settings.backlog_email
+    password = req.password or settings.backlog_password
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Thiếu email hoặc password")
+
+    bauth = get_backlog_auth()
+    result = bauth.login(email, password)
+
+    if result["success"]:
+        _save_backlog_session(bauth)
+
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "csrf_token": bauth.csrf_token if result["success"] else "",
+    }
+
+
 @router.post("/post-status")
 def post_backlog_status(req: BacklogPostRequest):
     """Post status update lên Backlog issue."""
     settings = get_settings()
-    cookie_str, _ = _load_backlog_cookies()
 
     if not settings.backlog_issue_id:
         raise HTTPException(status_code=400, detail="Chưa cấu hình BACKLOG_ISSUE_ID trong .env")
 
+    bauth = _ensure_backlog_session()
+
     url = f"{settings.backlog_base_url}/SwitchStatusAjax.action"
-    import datetime
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ".0"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ".0"
 
     headers = {
         "accept": "*/*",
         "content-type": "application/x-www-form-urlencoded",
         "cache-control": "no-cache",
         "pragma": "no-cache",
-        "x-csrf-token": settings.backlog_csrf_token,
+        "x-csrf-token": bauth.csrf_token,
         "x-requested-with": "XMLHttpRequest",
-        "cookie": cookie_str,
+        "cookie": bauth.cookie_header,
     }
 
     form_data = {
@@ -108,18 +199,25 @@ def post_backlog_status(req: BacklogPostRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/status")
+def backlog_auth_status():
+    """Kiểm tra trạng thái session Backlog hiện tại."""
+    bauth = get_backlog_auth()
+    return {
+        "logged_in": bauth.is_valid,
+        "backlog_base_url": get_settings().backlog_base_url,
+        "has_csrf": bool(bauth.csrf_token),
+    }
+
+
 @router.get("/config")
 def get_backlog_config():
     """Lấy cấu hình Backlog hiện tại."""
     settings = get_settings()
-    try:
-        cookie_str, _ = _load_backlog_cookies()
-        has_cookie = bool(cookie_str)
-    except Exception:
-        has_cookie = False
-
+    bauth = get_backlog_auth()
     return {
         "backlog_base_url": settings.backlog_base_url,
         "issue_id": settings.backlog_issue_id,
-        "has_cookie": has_cookie,
+        "logged_in": bauth.is_valid,
+        "has_credentials": bool(settings.backlog_email and settings.backlog_password),
     }
