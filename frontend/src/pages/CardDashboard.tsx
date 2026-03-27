@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet } from '../api'
 import { useI18n } from '../i18n'
-import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, LayoutDashboard } from 'lucide-react'
+import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, LayoutDashboard, Database } from 'lucide-react'
 
 interface Card {
   id: string
@@ -87,7 +87,8 @@ export default function CardDashboard() {
   const [luFilterOwner, setLuFilterOwner] = useState('')
   const [luPage, setLuPage] = useState(0) // offset-based
   const luPageSize = 50
-  const [luView, setLuView] = useState<'list' | 'by-owner' | 'by-dashboard'>('list')
+  const [luView, setLuView] = useState<'list' | 'by-owner' | 'by-dashboard' | 'by-dataset'>('list')
+  const [luDataset, setLuDataset] = useState<{ by_dashboard: any[]; datasets: any[] } | null>(null)
 
   // Init
   useEffect(() => {
@@ -146,6 +147,18 @@ export default function CardDashboard() {
   useEffect(() => {
     if (activeTab === 'low-usage') fetchLowUsage()
   }, [fetchLowUsage, activeTab])
+
+  // Fetch low-usage by dataset
+  const fetchLowUsageByDataset = useCallback(() => {
+    const p = new URLSearchParams({ max_views: String(luThreshold), limit: '50' })
+    apiGet<{ by_dashboard: any[]; datasets: any[] }>(`/api/cards/low-usage-by-dataset?${p}`)
+      .then(setLuDataset)
+      .catch(() => {})
+  }, [luThreshold])
+
+  useEffect(() => {
+    if (activeTab === 'low-usage' && luView === 'by-dataset') fetchLowUsageByDataset()
+  }, [fetchLowUsageByDataset, activeTab, luView])
 
   // Sort handlers
   const handleCardSort = (field: string) => {
@@ -531,6 +544,7 @@ export default function CardDashboard() {
                         {v === 'list' && <><AlertTriangle className="w-3.5 h-3.5" />{lang === 'vi' ? 'Danh sách' : 'リスト'}</>}
                         {v === 'by-owner' && <><Users className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Owner' : 'Owner別'}</>}
                         {v === 'by-dashboard' && <><LayoutDashboard className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dashboard' : 'ダッシュボード別'}</>}
+                        {v === 'by-dataset' && <><Database className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dataset' : 'Dataset別'}</>}
                       </button>
                     ))}
                   </div>
@@ -715,6 +729,82 @@ export default function CardDashboard() {
                           )
                         })}
                       </div>
+                    </div>
+                  </div>
+                )}
+                {/* ── By Dataset view ── */}
+                {luView === 'by-dataset' && (
+                  <div className="card">
+                    <div className="card-header flex items-center gap-2">
+                      <Database className="w-4 h-4 text-amber-500" />
+                      {lang === 'vi' ? 'Card ít dùng theo Dashboard/Dataset' : 'Dashboard別 低使用率カード分析'}
+                    </div>
+                    <div className="card-body">
+                      {!luDataset ? (
+                        <div className="text-center py-8 text-slate-400 text-sm">Loading...</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-200 text-left">
+                                <th className="p-2 w-8">#</th>
+                                <th className="p-2">{lang === 'vi' ? 'Dashboard' : 'ダッシュボード'}</th>
+                                <th className="p-2 text-right">{lang === 'vi' ? 'Tổng card' : '合計'}</th>
+                                <th className="p-2 text-right">{lang === 'vi' ? `≤ ${luThreshold} views` : `≤${luThreshold}閲覧`}</th>
+                                <th className="p-2 w-36">{lang === 'vi' ? 'Tỉ lệ' : '割合'}</th>
+                                <th className="p-2 text-right">%</th>
+                                <th className="p-2 w-8"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(luDataset.by_dashboard || []).map((d, i) => {
+                                const pct = Number(d.low_usage_pct) || 0
+                                const barColor = pct >= 80 ? 'from-red-400 to-red-500'
+                                  : pct >= 50 ? 'from-amber-400 to-orange-400'
+                                  : 'from-yellow-300 to-amber-400'
+                                return (
+                                  <tr key={i} className={`border-b border-slate-50 hover:bg-amber-50/20 transition-colors ${pct >= 80 ? 'bg-red-50/20' : ''}`}>
+                                    <td className="p-2 text-slate-400 text-xs font-bold">{i + 1}</td>
+                                    <td className="p-2">
+                                      {domoBase && d.page_id ? (
+                                        <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
+                                          className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate max-w-[240px] block">
+                                          {d.page_title}
+                                        </a>
+                                      ) : (
+                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[240px] block">{d.page_title}</span>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-xs text-right text-slate-500">{d.total_cards}</td>
+                                    <td className="p-2 text-right">
+                                      <span className="text-xs font-bold text-amber-600">{d.low_usage_count}</span>
+                                    </td>
+                                    <td className="p-2">
+                                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full bg-gradient-to-r ${barColor} rounded-full transition-all`}
+                                          style={{ width: `${Math.min(pct, 100)}%` }} />
+                                      </div>
+                                    </td>
+                                    <td className="p-2 text-right">
+                                      <span className={`text-xs font-bold ${pct >= 80 ? 'text-red-600' : pct >= 50 ? 'text-amber-600' : 'text-yellow-600'}`}>
+                                        {pct}%
+                                      </span>
+                                    </td>
+                                    <td className="p-2">
+                                      {domoBase && d.page_id && (
+                                        <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
+                                          className="text-slate-300 hover:text-blue-500">
+                                          <ExternalLink className="w-3.5 h-3.5" />
+                                        </a>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

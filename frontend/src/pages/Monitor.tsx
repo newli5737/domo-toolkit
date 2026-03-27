@@ -91,6 +91,20 @@ export default function Monitor() {
   const [dsTotal, setDsTotal] = useState(0)
   const [dfTotal, setDfTotal] = useState(0)
 
+  // Dataset sort
+  const [dsSortBy, setDsSortBy] = useState<keyof DatasetRow>('card_count')
+  const [dsSortOrder, setDsSortOrder] = useState<'ASC' | 'DESC'>('DESC')
+
+  const handleDsSort = (field: keyof DatasetRow) => {
+    if (dsSortBy === field) setDsSortOrder(o => o === 'ASC' ? 'DESC' : 'ASC')
+    else { setDsSortBy(field); setDsSortOrder('DESC') }
+  }
+  const DsSortIcon = ({ field }: { field: keyof DatasetRow }) => (
+    <span className="ml-0.5 text-[10px]">
+      {dsSortBy === field ? (dsSortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
+    </span>
+  )
+
   const loadDatasets = () => {
     apiGet<{ total: number; datasets: DatasetRow[] }>('/api/monitor/datasets?limit=100')
       .then(d => {
@@ -461,8 +475,25 @@ export default function Monitor() {
             <div className="table-wrapper">
               <table className="data-table">
                 <thead><tr>
-                  <th>{t('common.name')}</th><th>{t('common.status')}</th><th>{t('monitor.rows')}</th><th>{t('monitor.cards')}</th>
-                  <th>{t('common.type')}</th><th>{t('common.lastUpdated')}</th><th></th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('name')}>
+                    {t('common.name')}<DsSortIcon field="name" />
+                  </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('last_execution_state')}>
+                    {t('common.status')}<DsSortIcon field="last_execution_state" />
+                  </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('row_count')}>
+                    {t('monitor.rows')}<DsSortIcon field="row_count" />
+                  </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('card_count')}>
+                    {t('monitor.cards')}<DsSortIcon field="card_count" />
+                  </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('provider_type')}>
+                    {t('common.type')}<DsSortIcon field="provider_type" />
+                  </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('last_updated')}>
+                    {t('common.lastUpdated')}<DsSortIcon field="last_updated" />
+                  </th>
+                  <th></th>
                 </tr></thead>
                 <tbody>
                   {datasets.length === 0 && (
@@ -474,6 +505,14 @@ export default function Monitor() {
                       if (!dsFilterCardDir) return true
                       const c = ds.card_count || 0
                       return dsFilterCardDir === 'gte' ? c >= dsFilterCardVal : c < dsFilterCardVal
+                    })
+                    .sort((a, b) => {
+                      const av = a[dsSortBy] ?? ''
+                      const bv = b[dsSortBy] ?? ''
+                      const cmp = typeof av === 'number' && typeof bv === 'number'
+                        ? av - bv
+                        : String(av).localeCompare(String(bv))
+                      return dsSortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map(ds => (
                     <tr key={ds.id}>

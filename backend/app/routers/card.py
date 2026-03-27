@@ -288,3 +288,57 @@ def get_low_usage_cards(
     finally:
         db.close()
 
+
+
+@router.get("/low-usage-by-dataset")
+def get_low_usage_by_dataset(
+    max_views: int = Query(default=10, description="Nguong view toi da de coi la it dung"),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """Phan tich card it su dung nhom theo dashboard/dataset."""
+    db = _get_db()
+    try:
+        # Nhom cards theo page (dashboard) va tinh so card it dung, ti le
+        by_dashboard = db.query(
+            """
+            SELECT
+                page_title,
+                page_id,
+                COUNT(*) as total_cards,
+                COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) as low_usage_count,
+                COALESCE(SUM(view_count), 0) as total_views,
+                ROUND(
+                    COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END)::numeric
+                    / NULLIF(COUNT(*), 0) * 100,
+                    1
+                ) as low_usage_pct
+            FROM cards
+            WHERE page_title IS NOT NULL
+            GROUP BY page_title, page_id
+            HAVING COUNT(CASE WHEN view_count <= %s OR view_count IS NULL THEN 1 END) > 0
+            ORDER BY low_usage_count DESC, total_cards DESC
+            LIMIT %s
+            """,
+            [max_views, max_views, max_views, limit],
+        )
+
+        # Dataset stats tu bang datasets (card_count co san)
+        datasets = db.query(
+            """
+            SELECT id as dataset_id, name as dataset_name, provider_type,
+                   card_count as total_cards, row_count, last_updated
+            FROM datasets
+            WHERE card_count IS NOT NULL AND card_count > 0
+            ORDER BY card_count DESC
+            LIMIT %s
+            """,
+            [limit],
+        )
+
+        return {
+            "max_views_threshold": max_views,
+            "by_dashboard": [dict(r) for r in (by_dashboard or [])],
+            "datasets": [dict(r) for r in (datasets or [])],
+        }
+    finally:
+        db.close()
