@@ -536,7 +536,7 @@ export default function CardDashboard() {
                   </div>
                   {/* Sub-view toggle */}
                   <div className="flex gap-1 ml-auto">
-                    {(['list', 'by-owner', 'by-dashboard'] as const).map(v => (
+                    {(['list', 'by-owner', 'by-dashboard', 'by-dataset'] as const).map(v => (
                       <button key={v} onClick={() => setLuView(v)}
                         className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
                           luView === v ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
