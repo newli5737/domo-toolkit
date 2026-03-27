@@ -582,9 +582,12 @@ export default function CardDashboard() {
                               <tr key={c.id} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${
                                 (c.view_count === 0 || c.view_count == null) ? 'bg-red-50/20' : ''
                               }`}>
-                                <td className="p-2">
-                                  <div className="font-medium text-slate-700 text-xs truncate max-w-[250px]" title={c.title}>{c.title || '—'}</div>
-                                </td>
+                                 <td className="p-2">
+                                   <a href={`${domoBase}/kpis/details/${c.id}`} target="_blank" rel="noopener noreferrer"
+                                     className="font-medium text-xs truncate max-w-[250px] block text-slate-700 hover:text-blue-600 hover:underline transition-colors" title={c.title}>
+                                     {c.title || '—'}
+                                   </a>
+                                 </td>
                                 <td className="p-2"><span className="badge badge-info text-[10px]">{c.card_type || '—'}</span></td>
                                 <td className="p-2">
                                   <span className={`font-bold text-xs px-2 py-0.5 rounded-full ${
@@ -595,9 +598,16 @@ export default function CardDashboard() {
                                     {c.view_count ?? 0}
                                   </span>
                                 </td>
-                                <td className="p-2">
-                                  <span className="text-xs text-slate-500 truncate max-w-[180px] block">{c.page_title || '—'}</span>
-                                </td>
+                                 <td className="p-2">
+                                   {c.page_id ? (
+                                     <a href={`${domoBase}/page/${c.page_id}`} target="_blank" rel="noopener noreferrer"
+                                       className="text-xs text-slate-500 truncate max-w-[180px] block hover:text-blue-600 hover:underline transition-colors">
+                                       {c.page_title || '—'}
+                                     </a>
+                                   ) : (
+                                     <span className="text-xs text-slate-500 truncate max-w-[180px] block">{c.page_title || '—'}</span>
+                                   )}
+                                 </td>
                                 <td className="p-2 text-xs text-slate-500">{c.owner_name || '—'}</td>
                                 <td className="p-2">
                                   {domoBase && c.page_id && (
