@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet } from '../api'
 import { useI18n } from '../i18n'
-import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, LayoutDashboard, Database } from 'lucide-react'
+import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, Database } from 'lucide-react'
 
 interface Card {
   id: string
