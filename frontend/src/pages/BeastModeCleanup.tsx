@@ -321,7 +321,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                   className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
                   title={activeTab >= 1 && activeTab <= 4 ? (lang === 'ja' ? `グループ${activeTab}のみ出力` : `Chỉ xuất nhóm ${activeTab}`) : ''}
                 >
-                  ⬇ Export CSV {activeTab >= 1 && activeTab <= 4 ? `(Nhóm ${activeTab})` : ''}
+                  ⬇ Export CSV {activeTab >= 1 && activeTab <= 4 ? `(${GROUP_CONFIG.find(g => g.num === activeTab)?.label ?? activeTab})` : ''}
                 </button>
                 <div className="flex items-center gap-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg px-2 py-1.5">
                   <label className="text-[10px] text-gray-500 whitespace-nowrap">
@@ -698,7 +698,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${BADGE_BG[badgeColor]}`}>
-                                {bm.group_label}
+                                {gcfg?.label ?? bm.group_label}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.active_cards_count}</td>
