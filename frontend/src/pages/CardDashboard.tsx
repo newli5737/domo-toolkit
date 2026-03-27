@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet } from '../api'
 import { useI18n } from '../i18n'
-import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, LayoutDashboard } from 'lucide-react'
 
 interface Card {
   id: string
@@ -39,13 +39,22 @@ interface CardStats {
   top_dashboards: { page_title: string; card_count: number; total_views: number }[]
 }
 
+interface LowUsageData {
+  total: number
+  max_views_threshold: number
+  cards: Card[]
+  by_owner: { owner_name: string; card_count: number; total_views: number; zero_view_count: number }[]
+  by_dashboard: { page_title: string; page_id: string; card_count: number; total_views: number; zero_view_count: number }[]
+  by_type: { card_type: string; card_count: number; total_views: number }[]
+}
+
 export default function CardDashboard() {
   const { lang } = useI18n()
 
   const [stats, setStats] = useState<CardStats | null>(null)
   const [types, setTypes] = useState<string[]>([])
   const [domoBase, setDomoBase] = useState('')
-  const [activeTab, setActiveTab] = useState<'cards' | 'dashboards'>('cards')
+  const [activeTab, setActiveTab] = useState<'cards' | 'dashboards' | 'low-usage'>('cards')
 
   // ─── Cards state ───
   const [cards, setCards] = useState<Card[]>([])
@@ -69,6 +78,16 @@ export default function CardDashboard() {
   const [dSearch, setDSearch] = useState('')
   const [dSortBy, setDSortBy] = useState('total_views')
   const [dSortOrder, setDSortOrder] = useState('DESC')
+
+  // ─── Low-usage state ───
+  const [luData, setLuData] = useState<LowUsageData | null>(null)
+  const [luLoading, setLuLoading] = useState(false)
+  const [luThreshold, setLuThreshold] = useState(10)
+  const [luFilterType, setLuFilterType] = useState('')
+  const [luFilterOwner, setLuFilterOwner] = useState('')
+  const [luPage, setLuPage] = useState(0) // offset-based
+  const luPageSize = 50
+  const [luView, setLuView] = useState<'list' | 'by-owner' | 'by-dashboard'>('list')
 
   // Init
   useEffect(() => {
@@ -107,6 +126,26 @@ export default function CardDashboard() {
   }, [dPage, dSortBy, dSortOrder, dSearch])
 
   useEffect(() => { if (activeTab === 'dashboards') fetchDashboards() }, [fetchDashboards, activeTab])
+
+  // Fetch low-usage
+  const fetchLowUsage = useCallback(() => {
+    setLuLoading(true)
+    const p = new URLSearchParams({
+      max_views: String(luThreshold),
+      limit: String(luPageSize),
+      offset: String(luPage * luPageSize),
+    })
+    if (luFilterType) p.set('card_type', luFilterType)
+    if (luFilterOwner) p.set('owner', luFilterOwner)
+    apiGet<LowUsageData>(`/api/cards/low-usage?${p}`)
+      .then(setLuData)
+      .catch(() => {})
+      .finally(() => setLuLoading(false))
+  }, [luThreshold, luPage, luFilterType, luFilterOwner])
+
+  useEffect(() => {
+    if (activeTab === 'low-usage') fetchLowUsage()
+  }, [fetchLowUsage, activeTab])
 
   // Sort handlers
   const handleCardSort = (field: string) => {
@@ -162,6 +201,9 @@ export default function CardDashboard() {
     ) : null
   )
 
+  // Low-usage offset pagination
+  const luTotalPages = luData ? Math.ceil(luData.total / luPageSize) : 0
+
   return (
     <div>
       <div className="page-header">
@@ -204,6 +246,13 @@ export default function CardDashboard() {
               activeTab === 'dashboards' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
             }`}>
             📊 {lang === 'vi' ? 'Dashboard' : 'ダッシュボード'}
+          </button>
+          <button onClick={() => setActiveTab('low-usage')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'low-usage' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}>
+            <AlertTriangle className="w-4 h-4" />
+            {lang === 'vi' ? 'Ít sử dụng' : '低使用率'}
           </button>
         </div>
 
@@ -393,7 +442,7 @@ export default function CardDashboard() {
           </div>
         )}
 
-        {/* Type distribution */}
+        {/* Type distribution (dashboards tab) */}
         {activeTab === 'dashboards' && stats && (
           <div className="card">
             <div className="card-header">{lang === 'vi' ? 'Phân bổ loại Card' : 'カードタイプ分布'}</div>
@@ -412,6 +461,241 @@ export default function CardDashboard() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══ Low-Usage Tab ═══ */}
+        {activeTab === 'low-usage' && (
+          <div className="space-y-4">
+            {/* Controls */}
+            <div className="card">
+              <div className="card-header flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                {lang === 'vi' ? 'Phân tích Card ít sử dụng' : '低使用率カード分析'}
+              </div>
+              <div className="card-body">
+                <div className="flex flex-wrap items-end gap-3">
+                  {/* Threshold slider */}
+                  <div className="flex flex-col gap-1 min-w-[200px]">
+                    <label className="text-xs font-semibold text-slate-500">
+                      {lang === 'vi' ? 'Ngưỡng lượt xem ≤' : '閲覧数しきい値 ≤'}{' '}
+                      <span className="text-amber-600 font-bold">{luThreshold}</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={100} step={5} value={luThreshold}
+                      onChange={e => { setLuThreshold(Number(e.target.value)); setLuPage(0) }}
+                      className="w-full accent-amber-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>0</span><span>50</span><span>100</span>
+                    </div>
+                  </div>
+                  {/* Filter type */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">{lang === 'vi' ? 'Loại Card' : 'タイプ'}</label>
+                    <select value={luFilterType} onChange={e => { setLuFilterType(e.target.value); setLuPage(0) }}
+                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-amber-400">
+                      <option value="">{lang === 'vi' ? 'Tất cả' : '全て'}</option>
+                      {types.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  {/* Filter owner */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">Owner</label>
+                    <input type="text" value={luFilterOwner}
+                      onChange={e => { setLuFilterOwner(e.target.value); setLuPage(0) }}
+                      placeholder={lang === 'vi' ? 'Tìm owner...' : 'オーナー検索...'}
+                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-amber-400 w-40" />
+                  </div>
+                  {/* Sub-view toggle */}
+                  <div className="flex gap-1 ml-auto">
+                    {(['list', 'by-owner', 'by-dashboard'] as const).map(v => (
+                      <button key={v} onClick={() => setLuView(v)}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                          luView === v ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}>
+                        {v === 'list' && <><AlertTriangle className="w-3.5 h-3.5" />{lang === 'vi' ? 'Danh sách' : 'リスト'}</>}
+                        {v === 'by-owner' && <><Users className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Owner' : 'Owner別'}</>}
+                        {v === 'by-dashboard' && <><LayoutDashboard className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dashboard' : 'ダッシュボード別'}</>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Summary badge */}
+                {luData && !luLoading && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                      {formatNumber(luData.total)} {lang === 'vi' ? 'cards ít dùng' : '低使用率カード'}
+                    </span>
+                    {luData.by_type.map(t => (
+                      <span key={t.card_type} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px]">
+                        {t.card_type}: {t.card_count}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {luLoading && (
+              <div className="text-center py-10 text-slate-400">Loading...</div>
+            )}
+
+            {luData && !luLoading && (
+              <>
+                {/* ── List view ── */}
+                {luView === 'list' && (
+                  <div className="card">
+                    <div className="card-header">
+                      {lang === 'vi' ? 'Cards ít sử dụng' : '低使用率カード一覧'} ({formatNumber(luData.total)})
+                    </div>
+                    <div className="card-body">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-left">
+                              <th className="p-2">{lang === 'vi' ? 'Tên Card' : 'カード名'}</th>
+                              <th className="p-2">{lang === 'vi' ? 'Loại' : 'タイプ'}</th>
+                              <th className="p-2"><Eye className="w-3.5 h-3.5 inline mr-1" />{lang === 'vi' ? 'Lượt xem' : '閲覧数'}</th>
+                              <th className="p-2">{lang === 'vi' ? 'Dashboard' : 'ダッシュボード'}</th>
+                              <th className="p-2">Owner</th>
+                              <th className="p-2 w-10"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {luData.cards.map(c => (
+                              <tr key={c.id} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${
+                                (c.view_count === 0 || c.view_count == null) ? 'bg-red-50/20' : ''
+                              }`}>
+                                <td className="p-2">
+                                  <div className="font-medium text-slate-700 text-xs truncate max-w-[250px]" title={c.title}>{c.title || '—'}</div>
+                                </td>
+                                <td className="p-2"><span className="badge badge-info text-[10px]">{c.card_type || '—'}</span></td>
+                                <td className="p-2">
+                                  <span className={`font-bold text-xs px-2 py-0.5 rounded-full ${
+                                    (c.view_count === 0 || c.view_count == null)
+                                      ? 'bg-red-100 text-red-600'
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {c.view_count ?? 0}
+                                  </span>
+                                </td>
+                                <td className="p-2">
+                                  <span className="text-xs text-slate-500 truncate max-w-[180px] block">{c.page_title || '—'}</span>
+                                </td>
+                                <td className="p-2 text-xs text-slate-500">{c.owner_name || '—'}</td>
+                                <td className="p-2">
+                                  {domoBase && c.page_id && (
+                                    <a href={`${domoBase}/page/${c.page_id}`} target="_blank" rel="noopener noreferrer"
+                                      className="text-blue-500 hover:text-blue-700">
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Offset pagination */}
+                      {luTotalPages > 1 && (
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-xs text-slate-400">
+                            {lang === 'vi' ? 'Trang' : 'ページ'} {luPage + 1}/{luTotalPages}
+                          </span>
+                          <div className="flex gap-1">
+                            <button onClick={() => setLuPage(p => Math.max(0, p - 1))} disabled={luPage === 0}
+                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30">
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setLuPage(p => Math.min(luTotalPages - 1, p + 1))} disabled={luPage >= luTotalPages - 1}
+                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-30">
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── By Owner view ── */}
+                {luView === 'by-owner' && (
+                  <div className="card">
+                    <div className="card-header flex items-center gap-2">
+                      <Users className="w-4 h-4 text-amber-500" />
+                      {lang === 'vi' ? 'Phân tích theo Owner' : 'Owner別分析'}
+                    </div>
+                    <div className="card-body">
+                      <div className="space-y-2">
+                        {luData.by_owner.map((o, i) => {
+                          const maxCount = luData.by_owner[0]?.card_count || 1
+                          const pct = Math.round((o.card_count / maxCount) * 100)
+                          return (
+                            <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:border-amber-200 transition-all">
+                              <span className="text-[10px] font-bold text-slate-400 w-5">{i + 1}</span>
+                              <span className="text-xs font-semibold text-slate-700 w-40 truncate">{o.owner_name || '(unknown)'}</span>
+                              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-amber-400 to-orange-400 rounded-full"
+                                  style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-xs font-bold text-amber-600 w-16 text-right">{o.card_count} cards</span>
+                              {o.zero_view_count > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
+                                  {o.zero_view_count} zero
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-400 w-20 text-right">{formatNumber(o.total_views)} views</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── By Dashboard view ── */}
+                {luView === 'by-dashboard' && (
+                  <div className="card">
+                    <div className="card-header flex items-center gap-2">
+                      <LayoutDashboard className="w-4 h-4 text-amber-500" />
+                      {lang === 'vi' ? 'Phân tích theo Dashboard' : 'ダッシュボード別分析'}
+                    </div>
+                    <div className="card-body">
+                      <div className="space-y-2">
+                        {luData.by_dashboard.map((d, i) => {
+                          const maxCount = luData.by_dashboard[0]?.card_count || 1
+                          const pct = Math.round((d.card_count / maxCount) * 100)
+                          return (
+                            <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:border-amber-200 transition-all">
+                              <span className="text-[10px] font-bold text-slate-400 w-5">{i + 1}</span>
+                              <span className="text-xs font-semibold text-slate-700 flex-1 truncate">{d.page_title}</span>
+                              <div className="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-purple-400 to-amber-400 rounded-full"
+                                  style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-xs font-bold text-amber-600 w-16 text-right">{d.card_count} cards</span>
+                              {d.zero_view_count > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
+                                  {d.zero_view_count} zero
+                                </span>
+                              )}
+                              {domoBase && d.page_id && (
+                                <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
+                                  className="text-blue-500 hover:text-blue-700">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
