@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     backlog_csrf_token: str = ""
     backlog_email: str = ""
     backlog_password: str = ""
+    backlog_device_key: str = ""   # cookie "device_key" từ browser — bypass reCAPTCHA
 
     # Email Alert (Gmail SMTP)
     gmail_email: str = ""

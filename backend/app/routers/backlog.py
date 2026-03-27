@@ -27,7 +27,10 @@ def get_backlog_auth() -> BacklogAuth:
     global _backlog_auth
     if _backlog_auth is None:
         settings = get_settings()
-        _backlog_auth = BacklogAuth(backlog_base_url=settings.backlog_base_url)
+        _backlog_auth = BacklogAuth(
+            backlog_base_url=settings.backlog_base_url,
+            device_key=settings.backlog_device_key,
+        )
     return _backlog_auth
 
 

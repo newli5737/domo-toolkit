@@ -22,7 +22,7 @@ NULAB_BASE = "https://apps.nulab.com"
 class BacklogAuth:
     """Quản lý session đăng nhập Backlog qua Nulab SSO."""
 
-    def __init__(self, backlog_base_url: str = "https://mothers-sp.backlog.jp"):
+    def __init__(self, backlog_base_url: str = "https://mothers-sp.backlog.jp", device_key: str = ""):
         self.backlog_base_url = backlog_base_url
         self._session = requests.Session()
         self._session.headers.update({
@@ -33,6 +33,10 @@ class BacklogAuth:
             ),
             "accept-language": "vi-VN,vi;q=0.9,en-US;q=0.6,en;q=0.5",
         })
+        # Inject device_key ngay từ đầu — Nulab dùng nó để nhận ra thiết bị tin cậy, bỏ qua captcha
+        if device_key:
+            self._session.cookies.set("device_key", device_key, domain="apps.nulab.com")
+            print(f"[BACKLOG DEBUG] Injected device_key: {device_key[:20]}...")
         self._csrf_token: str = ""
         self._logged_in_at: datetime | None = None
         self._cookies: dict = {}
