@@ -323,7 +323,14 @@ export default function CardDashboard() {
                     ) : cards.map(c => (
                       <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                         <td className="p-2">
-                          <div className="font-medium text-slate-700 text-xs truncate max-w-[250px]" title={c.title}>{c.title || '—'}</div>
+                          {domoBase ? (
+                            <a href={`${domoBase}/kpis/details/${c.id}`} target="_blank" rel="noopener noreferrer"
+                              className="font-medium text-xs truncate max-w-[250px] block text-slate-700 hover:text-blue-600 hover:underline transition-colors" title={c.title}>
+                              {c.title || '—'}
+                            </a>
+                          ) : (
+                            <div className="font-medium text-slate-700 text-xs truncate max-w-[250px]" title={c.title}>{c.title || '—'}</div>
+                          )}
                         </td>
                         <td className="p-2"><span className="badge badge-info text-[10px]">{c.card_type || '—'}</span></td>
                         <td className="p-2">
@@ -332,7 +339,14 @@ export default function CardDashboard() {
                           </span>
                         </td>
                         <td className="p-2">
-                          <span className="text-xs text-slate-500 truncate max-w-[200px] block" title={c.page_title || ''}>{c.page_title || '—'}</span>
+                          {domoBase && c.page_id ? (
+                            <a href={`${domoBase}/page/${c.page_id}`} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-slate-500 truncate max-w-[200px] block hover:text-blue-600 hover:underline transition-colors" title={c.page_title || ''}>
+                              {c.page_title || '—'}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-slate-500 truncate max-w-[200px] block" title={c.page_title || ''}>{c.page_title || '—'}</span>
+                          )}
                         </td>
                         <td className="p-2 text-xs text-slate-500">{c.owner_name || '—'}</td>
                         <td className="p-2">
@@ -410,7 +424,14 @@ export default function CardDashboard() {
                           d.total_views === 0 ? 'bg-red-50/30' : ''
                         }`}>
                           <td className="p-2 font-semibold text-slate-400 text-xs">{rank}</td>
-                          <td className="p-2 font-medium text-slate-700 text-xs">{d.page_title}</td>
+                          <td className="p-2 font-medium text-xs">
+                            {domoBase && d.page_id ? (
+                              <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
+                                className="text-slate-700 hover:text-blue-600 hover:underline transition-colors">
+                                {d.page_title}
+                              </a>
+                            ) : d.page_title}
+                          </td>
                           <td className="p-2 text-xs">{d.card_count}</td>
                           <td className="p-2">
                             <span className={`text-xs font-semibold ${d.total_views > 0 ? 'text-green-600' : 'text-red-400'}`}>
@@ -423,14 +444,7 @@ export default function CardDashboard() {
                                 style={{ width: `${pct}%` }} />
                             </div>
                           </td>
-                          <td className="p-2">
-                            {domoBase && d.page_id && (
-                              <a href={`${domoBase}/page/${d.page_id}`} target="_blank" rel="noopener noreferrer"
-                                className="text-blue-500 hover:text-blue-700" title="Open in Domo">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                          </td>
+                        <td className="p-2 w-10"></td>
                         </tr>
                       )
                     })}
