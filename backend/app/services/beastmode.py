@@ -837,10 +837,14 @@ class BeastModeService:
             })
         return results
 
-    def export_csv(self) -> list[dict]:
-        """Lấy toàn bộ data cho CSV export."""
-        return self.db.query(
-            """SELECT a.bm_id, b.name as bm_name, b.legacy_id,
+    GROUP_LABELS_VI = {1: 'Không sử dụng', 2: 'Từng được dùng', 3: 'Card ít xem', 4: 'Đang hoạt động'}
+    GROUP_LABELS_JA = {1: '未使用', 2: '過去使用', 3: '低閲覧', 4: '稼働中'}
+
+    def export_csv(self, group_number: int = 0, lang: str = 'vi') -> list[dict]:
+        """Lấy data cho CSV export. group_number=0 → lấy tất cả."""
+        where = f"WHERE a.group_number = {group_number}" if group_number > 0 else ""
+        rows = self.db.query(
+            f"""SELECT a.bm_id, b.name as bm_name, b.legacy_id,
                       a.group_number, a.group_label,
                       a.active_cards_count, a.total_views,
                       a.referenced_by_count, a.dataset_names,
@@ -849,6 +853,14 @@ class BeastModeService:
                       a.url
                FROM bm_analysis a
                JOIN beastmodes b ON a.bm_id = b.id
+               {where}
                ORDER BY a.group_number, a.total_views DESC"""
         )
+        # Translate group_label theo lang
+        label_map = self.GROUP_LABELS_JA if lang == 'ja' else self.GROUP_LABELS_VI
+        for row in rows:
+            gnum = row.get('group_number') or 0
+            if gnum in label_map:
+                row['group_label'] = label_map[gnum]
+        return rows
 

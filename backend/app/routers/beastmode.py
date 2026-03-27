@@ -703,15 +703,15 @@ async def get_group(group_number: int, limit: int = 100, offset: int = 0):
 
 
 @router.get("/export/csv")
-async def export_csv(lang: str = "vi"):
-    """Tải file CSV kết quả phân tích. KHÔNG CẦN LOGIN."""
+async def export_csv(lang: str = "vi", group: int = 0):
+    """Tải file CSV kết quả phân tích. group=0 lấy tất cả. KHÔNG CẦN LOGIN."""
     db = get_db()
     try:
         from app.core.auth import DomoAuth
         dummy_auth = DomoAuth("astecpaints-co-jp.domo.com")
         api = DomoAPI(dummy_auth)
         bm_service = BeastModeService(api, db)
-        rows = bm_service.export_csv()
+        rows = bm_service.export_csv(group_number=group, lang=lang)
 
         if not rows:
             raise HTTPException(status_code=404, detail="Chưa có dữ liệu phân tích")
