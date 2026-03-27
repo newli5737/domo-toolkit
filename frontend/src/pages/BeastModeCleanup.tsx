@@ -296,6 +296,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   }
 
   return (
+    <div className="page-body">
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -841,6 +842,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }
