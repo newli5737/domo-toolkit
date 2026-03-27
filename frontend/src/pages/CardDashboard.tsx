@@ -94,9 +94,9 @@ export default function CardDashboard() {
   useEffect(() => {
     apiGet<any>('/api/auth/status').then(d => {
       if (d?.instance) setDomoBase(`https://${d.instance}`)
-    }).catch(() => {})
-    apiGet<CardStats>('/api/cards/stats').then(setStats).catch(() => {})
-    apiGet<string[]>('/api/cards/types').then(setTypes).catch(() => {})
+    }).catch(() => { })
+    apiGet<CardStats>('/api/cards/stats').then(setStats).catch(() => { })
+    apiGet<string[]>('/api/cards/types').then(setTypes).catch(() => { })
   }, [])
 
   // Fetch cards
@@ -109,7 +109,7 @@ export default function CardDashboard() {
     if (cFilterOwner) p.set('owner', cFilterOwner)
     apiGet<PagedResponse<Card>>(`/api/cards/list?${p}`)
       .then(d => { setCards(d.data); setCTotal(d.total); setCTotalPages(d.total_pages) })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setCLoading(false))
   }, [cPage, cSortBy, cSortOrder, cSearch, cFilterType, cFilterDash, cFilterOwner])
 
@@ -122,7 +122,7 @@ export default function CardDashboard() {
     if (dSearch) p.set('search', dSearch)
     apiGet<PagedResponse<DashboardRow>>(`/api/cards/dashboards?${p}`)
       .then(d => { setDashes(d.data); setDTotal(d.total); setDTotalPages(d.total_pages) })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setDLoading(false))
   }, [dPage, dSortBy, dSortOrder, dSearch])
 
@@ -140,7 +140,7 @@ export default function CardDashboard() {
     if (luFilterOwner) p.set('owner', luFilterOwner)
     apiGet<LowUsageData>(`/api/cards/low-usage?${p}`)
       .then(setLuData)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLuLoading(false))
   }, [luThreshold, luPage, luFilterType, luFilterOwner])
 
@@ -153,7 +153,7 @@ export default function CardDashboard() {
     const p = new URLSearchParams({ max_views: String(luThreshold), limit: '50' })
     apiGet<{ by_dashboard: any[]; datasets: any[] }>(`/api/cards/low-usage-by-dataset?${p}`)
       .then(setLuDataset)
-      .catch(() => {})
+      .catch(() => { })
   }, [luThreshold])
 
   useEffect(() => {
@@ -198,9 +198,8 @@ export default function CardDashboard() {
             if (p > totalPg) return null
             return (
               <button key={p} onClick={() => onPage(p)}
-                className={`w-8 h-8 rounded-lg text-xs font-semibold ${
-                  p === pg ? 'bg-blue-500 text-white' : 'border border-slate-200 hover:bg-slate-100'
-                }`}>
+                className={`w-8 h-8 rounded-lg text-xs font-semibold ${p === pg ? 'bg-blue-500 text-white' : 'border border-slate-200 hover:bg-slate-100'
+                  }`}>
                 {p}
               </button>
             )
@@ -249,21 +248,18 @@ export default function CardDashboard() {
         {/* Tabs */}
         <div className="flex gap-2">
           <button onClick={() => setActiveTab('cards')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'cards' ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}>
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'cards' ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}>
             📋 {lang === 'vi' ? 'Danh sách Card' : 'カード一覧'}
           </button>
           <button onClick={() => setActiveTab('dashboards')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'dashboards' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}>
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'dashboards' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}>
             📊 {lang === 'vi' ? 'Dashboard' : 'ダッシュボード'}
           </button>
           <button onClick={() => setActiveTab('low-usage')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'low-usage' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}>
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${activeTab === 'low-usage' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}>
             <AlertTriangle className="w-4 h-4" />
             {lang === 'vi' ? 'Ít sử dụng' : '低使用率'}
           </button>
@@ -433,9 +429,8 @@ export default function CardDashboard() {
                       const pct = Math.round((d.total_views / maxViews) * 100)
                       const rank = (dPage - 1) * 50 + i + 1
                       return (
-                        <tr key={d.page_id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${
-                          d.total_views === 0 ? 'bg-red-50/30' : ''
-                        }`}>
+                        <tr key={d.page_id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${d.total_views === 0 ? 'bg-red-50/30' : ''
+                          }`}>
                           <td className="p-2 font-semibold text-slate-400 text-xs">{rank}</td>
                           <td className="p-2 font-medium text-xs">
                             {domoBase && d.page_id ? (
@@ -457,7 +452,7 @@ export default function CardDashboard() {
                                 style={{ width: `${pct}%` }} />
                             </div>
                           </td>
-                        <td className="p-2 w-10"></td>
+                          <td className="p-2 w-10"></td>
                         </tr>
                       )
                     })}
@@ -538,9 +533,8 @@ export default function CardDashboard() {
                   <div className="flex gap-1 ml-auto">
                     {(['list', 'by-owner', 'by-dataset'] as const).map(v => (
                       <button key={v} onClick={() => setLuView(v)}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                          luView === v ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}>
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${luView === v ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          }`}>
                         {v === 'list' && <><AlertTriangle className="w-3.5 h-3.5" />{lang === 'vi' ? 'Danh sách' : 'リスト'}</>}
                         {v === 'by-owner' && <><Users className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Owner' : 'Owner別'}</>}
                         {v === 'by-dataset' && <><Database className="w-3.5 h-3.5" />{lang === 'vi' ? 'Theo Dataset' : 'Dataset別'}</>}
@@ -592,35 +586,33 @@ export default function CardDashboard() {
                           </thead>
                           <tbody>
                             {luData.cards.map(c => (
-                              <tr key={c.id} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${
-                                (c.view_count === 0 || c.view_count == null) ? 'bg-red-50/20' : ''
-                              }`}>
-                                 <td className="p-2">
-                                   <a href={`${domoBase}/kpis/details/${c.id}`} target="_blank" rel="noopener noreferrer"
-                                     className="font-medium text-xs truncate max-w-[250px] block text-slate-700 hover:text-blue-600 hover:underline transition-colors" title={c.title}>
-                                     {c.title || '—'}
-                                   </a>
-                                 </td>
+                              <tr key={c.id} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${(c.view_count === 0 || c.view_count == null) ? 'bg-red-50/20' : ''
+                                }`}>
+                                <td className="p-2">
+                                  <a href={`${domoBase}/kpis/details/${c.id}`} target="_blank" rel="noopener noreferrer"
+                                    className="font-medium text-xs truncate max-w-[250px] block text-slate-700 hover:text-blue-600 hover:underline transition-colors" title={c.title}>
+                                    {c.title || '—'}
+                                  </a>
+                                </td>
                                 <td className="p-2"><span className="badge badge-info text-[10px]">{c.card_type || '—'}</span></td>
                                 <td className="p-2">
-                                  <span className={`font-bold text-xs px-2 py-0.5 rounded-full ${
-                                    (c.view_count === 0 || c.view_count == null)
-                                      ? 'bg-red-100 text-red-600'
-                                      : 'bg-amber-100 text-amber-700'
-                                  }`}>
+                                  <span className={`font-bold text-xs px-2 py-0.5 rounded-full ${(c.view_count === 0 || c.view_count == null)
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'bg-amber-100 text-amber-700'
+                                    }`}>
                                     {c.view_count ?? 0}
                                   </span>
                                 </td>
-                                 <td className="p-2">
-                                   {c.page_id ? (
-                                     <a href={`${domoBase}/page/${c.page_id}`} target="_blank" rel="noopener noreferrer"
-                                       className="text-xs text-slate-500 truncate max-w-[180px] block hover:text-blue-600 hover:underline transition-colors">
-                                       {c.page_title || '—'}
-                                     </a>
-                                   ) : (
-                                     <span className="text-xs text-slate-500 truncate max-w-[180px] block">{c.page_title || '—'}</span>
-                                   )}
-                                 </td>
+                                <td className="p-2">
+                                  {c.page_id ? (
+                                    <a href={`${domoBase}/page/${c.page_id}`} target="_blank" rel="noopener noreferrer"
+                                      className="text-xs text-slate-500 truncate max-w-[180px] block hover:text-blue-600 hover:underline transition-colors">
+                                      {c.page_title || '—'}
+                                    </a>
+                                  ) : (
+                                    <span className="text-xs text-slate-500 truncate max-w-[180px] block">{c.page_title || '—'}</span>
+                                  )}
+                                </td>
                                 <td className="p-2 text-xs text-slate-500">{c.owner_name || '—'}</td>
                                 <td className="p-2">
                                   {domoBase && c.page_id && (
@@ -718,7 +710,7 @@ export default function CardDashboard() {
                                 <th className="p-2 w-8">#</th>
                                 <th className="p-2">{lang === 'vi' ? 'Dataset (Datasource)' : 'Dataset'}</th>
                                 <th className="p-2 text-right">{lang === 'vi' ? 'Tổng card' : '合計'}</th>
-                                <th className="p-2 text-right">{lang === 'vi' ? `≤ ${luThreshold} views` : `≤${luThreshold}閲覧`}</th>
+                                <th className="p-2 text-right">Card {lang === 'vi' ? `≤ ${luThreshold} views` : `≤${luThreshold}閲覧`}</th>
                                 <th className="p-2 w-36">{lang === 'vi' ? 'Tỉ lệ' : '割合'}</th>
                                 <th className="p-2 text-right">%</th>
                               </tr>
@@ -728,7 +720,7 @@ export default function CardDashboard() {
                                 const pct = Number(d.low_usage_pct) || 0
                                 const barColor = pct >= 80 ? 'from-red-400 to-red-500'
                                   : pct >= 50 ? 'from-amber-400 to-orange-400'
-                                  : 'from-yellow-300 to-amber-400'
+                                    : 'from-yellow-300 to-amber-400'
                                 const dsName = d.datasource_name || d.datasource_id || '(unknown)'
                                 return (
                                   <tr key={i} className={`border-b border-slate-50 hover:bg-amber-50/30 transition-colors ${pct >= 80 ? 'bg-red-50/20' : ''}`}>
