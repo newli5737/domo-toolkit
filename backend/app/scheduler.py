@@ -5,6 +5,7 @@ DOMO midnight re-login, và Backlog midnight re-login.
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 log = logging.getLogger(__name__)
 
@@ -115,14 +116,15 @@ def init_scheduler(config: dict | None = None):
     )
     print("[SCHEDULER] ✅ DOMO midnight re-login job đã đăng ký (00:00 JST)")
 
+    # Backlog session chỉ kéo dài 2-4 tiếng → re-login mỗi 2 tiếng
     _scheduler.add_job(
         _run_backlog_relogin,
-        trigger=CronTrigger(hour=0, minute=1, timezone="Asia/Tokyo"),
-        id="backlog_midnight_relogin",
-        name="Backlog Midnight Re-Login",
+        trigger=IntervalTrigger(hours=2),
+        id="backlog_interval_relogin",
+        name="Backlog Re-Login (every 2h)",
         replace_existing=True,
     )
-    print("[SCHEDULER] ✅ Backlog midnight re-login job đã đăng ký (00:01 JST)")
+    print("[SCHEDULER] ✅ Backlog re-login job đã đăng ký (mỗi 2 tiếng)")
 
     if config is None:
         try:

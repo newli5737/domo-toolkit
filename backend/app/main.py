@@ -65,16 +65,27 @@ def startup():
     from app.scheduler import init_scheduler
     init_scheduler()
 
-    # Auto-login nếu có credentials trong .env
+    # Auto-login DOMO nếu có credentials trong .env
     if settings.domo_username and settings.domo_password:
         from app.routers.auth import get_auth, _save_session
         auth_inst = get_auth()
         result = auth_inst.login(settings.domo_username, settings.domo_password)
         if result["success"]:
             _save_session(auth_inst)
-            print(f"✅ Auto-login thành công: {auth_inst.username}")
+            print(f"✅ Auto-login DOMO thành công: {auth_inst.username}")
         else:
-            print(f"⚠️ Auto-login thất bại: {result['message']}")
+            print(f"⚠️ Auto-login DOMO thất bại: {result['message']}")
+
+    # Auto-login Backlog nếu có credentials trong .env
+    if settings.backlog_email and settings.backlog_password:
+        from app.routers.backlog import get_backlog_auth, _save_backlog_session
+        bauth = get_backlog_auth()
+        result = bauth.login(settings.backlog_email, settings.backlog_password)
+        if result["success"]:
+            _save_backlog_session(bauth)
+            print(f"✅ Auto-login Backlog thành công!")
+        else:
+            print(f"⚠️ Auto-login Backlog thất bại: {result['message']}")
 
 
 @app.on_event("shutdown")

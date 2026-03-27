@@ -43,8 +43,8 @@ class BacklogAuth:
     def is_valid(self) -> bool:
         if not self._cookies or self._logged_in_at is None:
             return False
-        # Session thường có giá trị hơn 1 ngày, re-login mỗi 20 tiếng cho an toàn
-        return datetime.now() - self._logged_in_at < timedelta(hours=20)
+        # Session Backlog thường hết sau 2-4 tiếng, re-login sau 1h50 cho an toàn
+        return datetime.now() - self._logged_in_at < timedelta(hours=1, minutes=50)
 
     @property
     def cookie_header(self) -> str:
