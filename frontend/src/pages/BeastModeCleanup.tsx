@@ -229,6 +229,19 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
     }
   }
 
+  const startBmOnly = async () => {
+    try {
+      setCrawling(true)
+      setSummary(null)
+      setCrawlProgress(null)
+      connectWs()
+      await apiPost('/api/beastmode/crawl/bm-only')
+    } catch (err) {
+      setCrawling(false)
+      alert(err instanceof Error ? err.message : 'Lỗi')
+    }
+  }
+
   const loadSummary = async () => {
     try {
       const data = await apiGet<Summary>('/api/beastmode/summary')
@@ -350,6 +363,13 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                   className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-cyan)] to-[var(--color-accent-blue)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-cyan)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   🔄 Retry Details
+                </button>
+                <button
+                  onClick={startBmOnly}
+                  disabled={crawling}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-purple)] to-[var(--color-accent-blue)] text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-purple)]/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  🔍 Crawl BM Only
                 </button>
               </>
             )}

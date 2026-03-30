@@ -537,6 +537,142 @@ def _run_retry_details(job_id: int):
     finally:
         db.close()
 
+
+def _run_bm_only_crawl(job_id: int):
+    """Background task: chỉ chạy Step 1 (Crawl BM) + Step 2 (Fetch Details).
+    KHÔNG crawl cards/views/analyze. Giữ nguyên data cards cũ.
+    """
+    import queue as queue_mod
+
+    auth = require_auth()
+    db = get_db()
+    api = DomoAPI(auth)
+    bm_service = BeastModeService(api, db)
+
+    step_times = {}
+    crawl_start = time.time()
+    crawl_cancel.clear()
+    _init_progress(job_id)
+
+    # Override: chỉ hiển thị 2 steps
+    with _progress_lock:
+        crawl_progress["steps"] = {
+            1: {"name": STEP_NAMES[1], "status": "pending", "processed": 0, "total": 0, "percent": 0},
+            2: {"name": STEP_NAMES[2], "status": "pending", "processed": 0, "total": 0, "percent": 0},
+        }
+
+    log.info("=" * 60)
+    log.info(f"🔍 BẮT ĐẦU CRAWL BM-ONLY (Job #{job_id})")
+    log.info("=" * 60)
+
+    try:
+        db.execute(
+            """UPDATE crawl_jobs SET status = 'running', started_at = %s,
+               total_steps = 2 WHERE id = %s""",
+            (datetime.now(), job_id)
+        )
+
+        # Xóa dữ liệu BM cũ (giữ cards)
+        log.info("🧹 Xóa dữ liệu BM cũ...")
+        for tbl in ("bm_analysis", "bm_card_map", "beastmodes"):
+            db.execute(f"DELETE FROM {tbl}")
+        log.info("  ✅ Đã xóa xong dữ liệu BM cũ")
+
+        # Queue cho pipeline Step1 → Step2
+        bm_queue = queue_mod.Queue()
+        step1_done = threading.Event()
+
+        step1_start = time.time()
+
+        # Step 2 consumer thread
+        step2_processed = [0]
+        step2_total = [0]
+
+        def step2_consumer():
+            db_s2 = get_db()
+            api_s2 = DomoAPI(auth)
+            bm_s2 = BeastModeService(api_s2, db_s2)
+            s2_start = time.time()
+            log.step(2, 2, f"📋 {STEP_NAMES[2]} (chờ BM IDs...)")
+
+            while not crawl_cancel.is_set():
+                try:
+                    batch_ids = bm_queue.get(timeout=2)
+                except queue_mod.Empty:
+                    if step1_done.is_set() and bm_queue.empty():
+                        break
+                    continue
+
+                if batch_ids is None:
+                    break
+
+                step2_total[0] += len(batch_ids)
+                log.info(f"  📋 Step 2: nhận {len(batch_ids)} BM IDs (tổng: {step2_total[0]})")
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(bm_s2.fetch_details_batch(batch_ids))
+                finally:
+                    loop.close()
+
+                step2_processed[0] += len(batch_ids)
+                _update_progress(2, step2_processed[0], step2_total[0])
+
+            db_s2.close()
+            step_times[2] = time.time() - s2_start
+            _update_progress(2, step2_processed[0], step2_total[0], status="done")
+            log.success(f"  ✅ Step 2 hoàn tất: {step2_processed[0]} BMs ({step_times[2]:.1f}s)")
+
+        t_s2 = threading.Thread(target=step2_consumer, name="bm-only-step2", daemon=True)
+        t_s2.start()
+
+        # Step 1: Crawl BM
+        log.step(1, 2, f"🔍 {STEP_NAMES[1]}")
+        _update_progress(1, 0, 0, message="Đang crawl Beast Mode...")
+
+        all_bms = bm_service.crawl_all(
+            job_id=job_id,
+            progress_callback=lambda p, t: _update_progress(1, p, t),
+            on_batch_callback=lambda ids: bm_queue.put(ids),
+        )
+
+        step_times[1] = time.time() - step1_start
+        _update_progress(1, len(all_bms), len(all_bms), status="done")
+        log.success(f"  ✅ Step 1 hoàn tất: {len(all_bms)} BM ({step_times[1]:.1f}s)")
+
+        step1_done.set()
+        bm_queue.put(None)  # sentinel
+        t_s2.join()
+
+        # ─── Done ─────────────────────────────────────────
+        total_time = time.time() - crawl_start
+        log.info("=" * 60)
+        log.success(f"🎉 BM-ONLY CRAWL HOÀN TẤT! {len(all_bms)} BM ({total_time:.1f}s)")
+        for s, t in step_times.items():
+            log.info(f"   Step {s} ({STEP_NAMES.get(s, '')}): {t:.1f}s")
+        log.info("=" * 60)
+
+        db.execute(
+            """UPDATE crawl_jobs SET status = 'done', finished_at = %s,
+               message = %s, found = %s, current_step = 2
+               WHERE id = %s""",
+            (datetime.now(), f"BM-only hoàn tất: {len(all_bms)} BM", len(all_bms), job_id)
+        )
+        _finish_progress("done", f"BM-only hoàn tất: {len(all_bms)} BM")
+
+    except Exception as e:
+        total_time = time.time() - crawl_start
+        log.exception(f"❌ BM-ONLY LỖI sau {total_time:.1f}s", e)
+        db.execute(
+            "UPDATE crawl_jobs SET status = 'error', message = %s, finished_at = %s WHERE id = %s",
+            (str(e)[:500], datetime.now(), job_id)
+        )
+        _finish_progress("error", str(e)[:500])
+    finally:
+        db.close()
+
+
 @router.post("/crawl")
 async def start_crawl(background_tasks: BackgroundTasks):
     """Bắt đầu crawl toàn bộ BM + cards (chạy background). CẦN LOGIN."""
@@ -610,6 +746,28 @@ async def start_retry_details(background_tasks: BackgroundTasks):
 
     return {"job_id": job_id, "message": "Retry BM Details đã bắt đầu"}
 
+
+@router.post("/crawl/bm-only")
+async def start_bm_only_crawl(background_tasks: BackgroundTasks):
+    """Chỉ crawl Beast Mode + fetch details (Step 1+2). KHÔNG crawl cards. CẦN LOGIN."""
+    require_auth()
+    db = get_db()
+
+    db.execute(
+        """INSERT INTO crawl_jobs (job_type, status, started_at, message, total_steps, current_step, step_name)
+           VALUES ('beastmode_full', 'pending', %s, 'BM-Only Crawl...', 2, 0, 'Khởi tạo')""",
+        (datetime.now(),)
+    )
+    job = db.query_one(
+        "SELECT id FROM crawl_jobs WHERE job_type = 'beastmode_full' ORDER BY id DESC LIMIT 1"
+    )
+    job_id = job["id"]
+    db.close()
+
+    log.info(f"📝 Tạo BM-only crawl job #{job_id}")
+    background_tasks.add_task(_run_bm_only_crawl, job_id)
+
+    return {"job_id": job_id, "message": "BM-Only Crawl đã bắt đầu"}
 
 # ─── Read-only endpoints (KHÔNG CẦN LOGIN) ───────────────
 
