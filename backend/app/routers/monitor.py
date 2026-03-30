@@ -290,10 +290,7 @@ def crawl_datasets_only(
                     # Get detail to retrieve streamId + accurate provider_type
                     detail = service.fetch_dataset_detail(ds_id)
                     if detail:
-                        # Update provider_type from detail API (search API chỉ trả "STANDARD")
-                        if detail.get("provider_type"):
-                            ds["provider_type"] = detail["provider_type"]
-                        # Update card_count, row_count from detail (chính xác hơn search)
+
                         if detail.get("card_count") is not None:
                             ds["card_count"] = detail["card_count"]
                         if detail.get("row_count") is not None:

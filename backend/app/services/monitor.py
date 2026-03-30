@@ -132,26 +132,39 @@ class MonitorService:
 
         data = resp.json()
 
-        # Tìm provider_type từ nhiều nguồn khác nhau
-        provider_type = ""
+        # Tìm provider_type thực sự
+        # Domo API structure:
+        # - displayType: "DataFlow", "domo-csv", "mysql" ... (loại hiển thị thực)
+        # - type: "DataFlow" (root level, thường giống displayType)
+        # - dataProvider.type: luôn "STANDARD" hoặc "STANDARD_OAUTH" (loại connector, ko hữu ích)
+        # - dataProvider.name: "DataFlow", "MySQL SSH", "domo-csv" ... (tên connector, hữu ích)
+        # - dataProviderType: "DataFlow" (tương tự displayType)
+        
         dp = data.get("dataProvider")
-        if isinstance(dp, dict):
-            provider_type = dp.get("type", "")
+        dp_type = dp.get("type", "") if isinstance(dp, dict) else ""
+        dp_name = dp.get("name", "") if isinstance(dp, dict) else ""
+        display_type = data.get("displayType", "")
+        root_type = data.get("type", "")
+        data_provider_type = data.get("dataProviderType", "")
+        
+        # Ưu tiên: displayType > dataProviderType > dataProvider.name > root type
+        # Bỏ qua "STANDARD"/"STANDARD_OAUTH" vì đó là loại connector generic
+        provider_type = ""
+        for candidate in [display_type, data_provider_type, dp_name, root_type, dp_type]:
+            if candidate and candidate not in ("STANDARD", "STANDARD_OAUTH"):
+                provider_type = candidate
+                break
+        # Fallback nếu tất cả đều STANDARD
         if not provider_type:
-            provider_type = data.get("dataProviderType", "")
-        if not provider_type:
-            provider_type = data.get("transportType", "")
-        if not provider_type:
-            provider_type = data.get("type", "")
+            provider_type = display_type or data_provider_type or dp_type or root_type or ""
 
         # Debug: in ra 5 dataset đầu tiên
         MonitorService._detail_debug_count += 1
         if MonitorService._detail_debug_count <= 5:
-            type_keys = {k: v for k, v in data.items()
-                         if 'type' in k.lower() or 'provider' in k.lower() or 'transport' in k.lower()}
-            dp_info = f"dataProvider={dp}" if isinstance(dp, dict) else f"dataProvider={type(dp).__name__}({dp})"
             log.info(f"  [DEBUG-DETAIL] id={dataset_id}, name={data.get('name','')[:40]}, "
-                     f"resolved_provider_type='{provider_type}', {dp_info}, type_fields={type_keys}")
+                     f"FINAL='{provider_type}', displayType='{display_type}', "
+                     f"dataProviderType='{data_provider_type}', dp.name='{dp_name}', "
+                     f"dp.type='{dp_type}', root.type='{root_type}'")
 
         return {
             "id": str(data.get("id", dataset_id)),
@@ -504,6 +517,12 @@ class MonitorService:
                         dataset_details.append(result)
                 except Exception as e:
                     log.error(f"  Fetch dataset detail lỗi: {e}")
+
+        search_type_map = {str(ds.get("id", "")): ds.get("provider_type", "") for ds in raw_datasets}
+        for dd in dataset_details:
+            search_pt = search_type_map.get(str(dd.get("id", "")), "")
+            if search_pt and search_pt not in ("STANDARD", "STANDARD_OAUTH"):
+                dd["provider_type"] = search_pt
 
         self.save_datasets(dataset_details)
 

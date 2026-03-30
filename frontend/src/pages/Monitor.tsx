@@ -119,7 +119,7 @@ export default function Monitor() {
   )
 
   const loadDatasets = () => {
-    apiGet<{ total: number; datasets: DatasetRow[] }>('/api/monitor/datasets?limit=100')
+    apiGet<{ total: number; datasets: DatasetRow[] }>('/api/monitor/datasets?limit=2000')
       .then(d => {
         console.log('[DEBUG] Datasets loaded:', d.datasets?.length, 'first row:', d.datasets?.[0])
         console.log('[DEBUG] schedule_state values:', d.datasets?.slice(0, 5).map(ds => ({ name: ds.name, schedule_state: ds.schedule_state })))
@@ -129,7 +129,7 @@ export default function Monitor() {
   }
 
   const loadDataflows = () => {
-    apiGet<{ total: number; dataflows: DataflowRow[] }>('/api/monitor/dataflows?limit=100')
+    apiGet<{ total: number; dataflows: DataflowRow[] }>('/api/monitor/dataflows?limit=2000')
       .then(d => { setDataflows(d.dataflows || []); setDfTotal(d.total || 0) })
       .catch(() => {})
   }
