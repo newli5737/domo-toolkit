@@ -518,11 +518,29 @@ class MonitorService:
                 except Exception as e:
                     log.error(f"  Fetch dataset detail lỗi: {e}")
 
-        search_type_map = {str(ds.get("id", "")): ds.get("provider_type", "") for ds in raw_datasets}
+        # Merge dữ liệu từ search API (chính xác hơn) vào detail results
+        search_map = {str(ds.get("id", "")): ds for ds in raw_datasets}
         for dd in dataset_details:
-            search_pt = search_type_map.get(str(dd.get("id", "")), "")
+            dd_id = str(dd.get("id", ""))
+            search_ds = search_map.get(dd_id, {})
+            
+            # provider_type: search API trả đúng (mysql-ssh, DataFlow...),
+            # detail API luôn trả STANDARD
+            search_pt = search_ds.get("provider_type", "")
             if search_pt and search_pt not in ("STANDARD", "STANDARD_OAUTH"):
                 dd["provider_type"] = search_pt
+            
+            # schedule_state: search API có, detail API không trả
+            if not dd.get("schedule_state") and search_ds.get("schedule_state"):
+                dd["schedule_state"] = search_ds["schedule_state"]
+            
+            # Convert schedule_active (bool) → schedule_state nếu vẫn chưa có
+            if not dd.get("schedule_state"):
+                sa = dd.get("schedule_active")
+                if sa is True:
+                    dd["schedule_state"] = "ACTIVE"
+                elif sa is False:
+                    dd["schedule_state"] = "INACTIVE"
 
         self.save_datasets(dataset_details)
 
