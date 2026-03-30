@@ -731,7 +731,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                                   {bm.card_ids.split('\n').filter(Boolean).map((cid, ci) => (
                                     <a
                                       key={ci}
-                                      href={`https://astecpaints-co-jp.domo.com/page/1/kpis/details/${cid.trim()}`}
+                                      href={`https://astecpaints-co-jp.domo.com/page/kpis/details/${cid.trim()}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="text-[10px] text-[var(--color-accent-cyan)] hover:underline font-mono"

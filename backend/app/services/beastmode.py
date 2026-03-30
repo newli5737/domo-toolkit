@@ -378,7 +378,7 @@ class BeastModeService:
                 "url": f"https://{self.api.auth.instance}/datacenter/beastmode?id={bm_id}",
                 "legacy_id": bm.get("legacy_id") or "",
                 "owner_name": owner_map.get(bm.get("owner_id"), ""),
-                "card_ids": "\n".join(str(c) for c in active_cards),
+                "card_ids": "\n".join((str(c).split(":")[1] if str(c).startswith("dr:") else str(c)) for c in active_cards),
             }
             results.append(result_row)
 
@@ -925,7 +925,7 @@ class BeastModeService:
                 for cid in cids.split('\n'):
                     cid = cid.strip()
                     if cid:
-                        lines.append(f"https://{instance}/page/1/kpis/details/{cid}")
+                        lines.append(f"https://{instance}/page/kpis/details/{cid}")
                 row['card_ids'] = '\n'.join(lines)
         return rows
 
