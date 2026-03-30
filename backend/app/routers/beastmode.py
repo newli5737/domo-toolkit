@@ -385,10 +385,9 @@ def _run_full_crawl(job_id: int):
 def _run_view_and_analyze(job_id: int, low_view_threshold: int = 10):
     """Background task: chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API)."""
     db = get_db()
-    # Dùng dummy auth vì chỉ cần DB, không gọi API
-    from app.core.auth import DomoAuth
-    dummy_auth = DomoAuth("astecpaints-co-jp.domo.com")
-    api = DomoAPI(dummy_auth)
+    from app.core.auth import get_auth
+    auth = get_auth()
+    api = DomoAPI(auth)
     bm_service = BeastModeService(api, db)
 
     crawl_start = time.time()
@@ -894,17 +893,33 @@ async def export_csv(lang: str = "vi", group: int = 0):
             "url": "URL",
         }
 
-        original_keys = list(rows[0].keys())
+        header_map_vi = {
+            "bm_id": "BM ID",
+            "bm_name": "Tên Beast Mode",
+            "legacy_id": "Legacy ID",
+            "group_number": "Nhóm số",
+            "group_label": "Nhãn nhóm",
+            "owner_name": "Người tạo (Owner)",
+            "active_cards_count": "Số Card đang dùng",
+            "total_views": "Tổng lượt xem",
+            "referenced_by_count": "Số BM tham chiếu",
+            "dataset_names": "Tên Dataset",
+            "card_ids": "Link tới Card",
+            "complexity_score": "Độ phức tạp",
+            "duplicate_hash": "Mã Hash Trùng Lặp",
+            "normalized_hash": "Mã Hash Chuẩn Hóa",
+            "structure_hash": "Mã Hash Cấu Trúc",
+            "url": "Đường dẫn",
+        }
 
-        if lang == "ja":
-            mapped_keys = [header_map_ja.get(k, k) for k in original_keys]
-            mapped_rows = [
-                {header_map_ja.get(k, k): v for k, v in row.items()}
-                for row in rows
-            ]
-        else:
-            mapped_keys = original_keys
-            mapped_rows = rows
+        original_keys = list(rows[0].keys())
+        current_map = header_map_ja if lang == "ja" else header_map_vi
+
+        mapped_keys = [current_map.get(k, k) for k in original_keys]
+        mapped_rows = [
+            {current_map.get(k, k): v for k, v in row.items()}
+            for row in rows
+        ]
 
         # Tạo CSV in-memory
         output = io.StringIO()
