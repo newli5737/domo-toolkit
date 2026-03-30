@@ -36,6 +36,7 @@ class MonitorService:
     def crawl_all_datasets(self, progress_callback=None) -> list[dict]:
         """Search toàn bộ datasets qua /api/data/ui/v3/datasources/search."""
         log.info("Bắt đầu crawl datasets...")
+        MonitorService._detail_debug_count = 0  # Reset debug counter
 
         all_datasets = []
         offset = 0
@@ -76,6 +77,12 @@ class MonitorService:
             for i, ds in enumerate(datasets):
                 card_info = ds.get("cardInfo", {})
 
+                # Debug: in ra 3 dataset đầu tiên (chỉ batch đầu) để xem cấu trúc
+                if offset == 0 and i < 3:
+                    type_keys = {k: v for k, v in ds.items()
+                                 if 'type' in k.lower() or 'provider' in k.lower() or 'transport' in k.lower()}
+                    log.info(f"  [DEBUG-SEARCH] Dataset #{i}: name={ds.get('name','')[:40]}, type_fields={type_keys}")
+
                 # Determine schedule state
                 schedule_active = ds.get("scheduleActive")
                 if schedule_active is True:
@@ -112,6 +119,8 @@ class MonitorService:
         log.info(f"Crawl datasets xong: {len(all_datasets)}")
         return all_datasets
 
+    _detail_debug_count = 0  # class-level counter for debug
+
     def fetch_dataset_detail(self, dataset_id: str) -> dict | None:
         """Lấy chi tiết 1 dataset qua /api/data/v3/datasources/{id}.
         Trả về đầy đủ fields cho cả health check lẫn schedule viewer.
@@ -122,6 +131,28 @@ class MonitorService:
             return None
 
         data = resp.json()
+
+        # Tìm provider_type từ nhiều nguồn khác nhau
+        provider_type = ""
+        dp = data.get("dataProvider")
+        if isinstance(dp, dict):
+            provider_type = dp.get("type", "")
+        if not provider_type:
+            provider_type = data.get("dataProviderType", "")
+        if not provider_type:
+            provider_type = data.get("transportType", "")
+        if not provider_type:
+            provider_type = data.get("type", "")
+
+        # Debug: in ra 5 dataset đầu tiên
+        MonitorService._detail_debug_count += 1
+        if MonitorService._detail_debug_count <= 5:
+            type_keys = {k: v for k, v in data.items()
+                         if 'type' in k.lower() or 'provider' in k.lower() or 'transport' in k.lower()}
+            dp_info = f"dataProvider={dp}" if isinstance(dp, dict) else f"dataProvider={type(dp).__name__}({dp})"
+            log.info(f"  [DEBUG-DETAIL] id={dataset_id}, name={data.get('name','')[:40]}, "
+                     f"resolved_provider_type='{provider_type}', {dp_info}, type_fields={type_keys}")
+
         return {
             "id": str(data.get("id", dataset_id)),
             "name": data.get("name", ""),
@@ -129,10 +160,7 @@ class MonitorService:
             "column_count": data.get("columnCount", 0),
             "card_count": data.get("cardCount", 0),
             "data_flow_count": data.get("dataFlowCount", 0),
-            "provider_type": (
-                data.get("dataProvider", {}).get("type", "")
-                if isinstance(data.get("dataProvider"), dict) else ""
-            ),
+            "provider_type": provider_type,
             "stream_id": data.get("streamId", ""),
             "schedule_active": data.get("scheduleActive"),
             "status": data.get("status"),
@@ -170,7 +198,11 @@ class MonitorService:
 
         if rows:
             self.db.bulk_upsert("datasets", rows, "id")
+            # Debug: thống kê provider_type distribution
+            from collections import Counter
+            pt_counts = Counter(r.get("provider_type", "") for r in rows)
             log.info(f"Lưu {len(rows)} datasets vào DB")
+            log.info(f"  [DEBUG] provider_type distribution: {dict(pt_counts)}")
 
     # ─── Schedule / Execution History ─────────────────────────
 
