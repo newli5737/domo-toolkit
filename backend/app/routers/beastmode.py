@@ -385,7 +385,7 @@ def _run_full_crawl(job_id: int):
 def _run_view_and_analyze(job_id: int, low_view_threshold: int = 10):
     """Background task: chỉ chạy phân tích lại từ DB sẵn có (KHÔNG crawl API)."""
     db = get_db()
-    from app.core.auth import get_auth
+    from app.routers.auth import get_auth
     auth = get_auth()
     api = DomoAPI(auth)
     bm_service = BeastModeService(api, db)
