@@ -455,7 +455,7 @@ def get_check_status():
 def list_datasets(
     provider_type: str = Query(default="", description="Filter theo provider type"),
     min_card_count: int = Query(default=0, description="Filter dataset >= N cards"),
-    limit: int = Query(default=100, description="Số lượng tối đa"),
+    limit: int = Query(default=5000, description="Số lượng tối đa"),
     offset: int = Query(default=0, description="Offset phân trang"),
 ):
     """Danh sách datasets trong DB + trạng thái cập nhật."""
@@ -504,7 +504,7 @@ def list_datasets(
 @router.get("/dataflows")
 def list_dataflows(
     status_filter: str = Query(default="", description="Filter theo status (FAILED, SUCCESS...)"),
-    limit: int = Query(default=100, description="Số lượng tối đa"),
+    limit: int = Query(default=5000, description="Số lượng tối đa"),
     offset: int = Query(default=0, description="Offset phân trang"),
 ):
     """Danh sách dataflows trong DB + execution gần nhất."""

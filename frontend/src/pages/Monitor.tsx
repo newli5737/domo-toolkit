@@ -496,6 +496,7 @@ export default function Monitor() {
             <div className="table-wrapper">
               <table className="data-table">
                 <thead><tr>
+                  <th className="w-12 text-center">#</th>
                   <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('name')}>
                     {t('common.name')}<DsSortIcon field="name" />
                   </th>
@@ -518,7 +519,7 @@ export default function Monitor() {
                 </tr></thead>
                 <tbody>
                   {datasets.length === 0 && (
-                    <tr><td colSpan={7} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
+                    <tr><td colSpan={8} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {datasets
                     .filter(ds => !dsSearch.trim() || ds.name?.toLowerCase().includes(dsSearch.trim().toLowerCase()))
@@ -536,8 +537,9 @@ export default function Monitor() {
                         : String(av).localeCompare(String(bv))
                       return dsSortOrder === 'ASC' ? cmp : -cmp
                     })
-                    .map(ds => (
+                    .map((ds, idx) => (
                     <tr key={ds.id}>
+                      <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
                       <td className="font-medium max-w-[300px] truncate">{ds.name}</td>
                       <td>{getStatusBadge(ds.last_execution_state || ds.schedule_state || '')}</td>
                       <td>{ds.row_count?.toLocaleString() || '-'}</td>
@@ -587,17 +589,19 @@ export default function Monitor() {
             <div className="table-wrapper">
               <table className="data-table">
                 <thead><tr>
+                  <th className="w-12 text-center">#</th>
                   <th>{t('common.name')}</th><th>{t('common.status')}</th><th>{t('monitor.lastExec')}</th>
                   <th>{t('monitor.executions')}</th><th>{t('monitor.owner')}</th><th></th>
                 </tr></thead>
                 <tbody>
                   {dataflows.length === 0 && (
-                    <tr><td colSpan={6} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
+                    <tr><td colSpan={7} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {dataflows
                     .filter(df => !dfSearch.trim() || df.name?.toLowerCase().includes(dfSearch.trim().toLowerCase()))
-                    .map(df => (
+                    .map((df, idx) => (
                     <tr key={df.id}>
+                      <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
                       <td className="font-medium max-w-[300px] truncate">{df.name}</td>
                       <td>
                         {getStatusBadge(df.last_execution_state)}
