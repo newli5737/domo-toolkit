@@ -144,6 +144,16 @@ def run_migrations(conn=None):
             applied_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    # Thêm column description nếu bảng cũ chưa có
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_name='migration_log' AND column_name='description') THEN
+                ALTER TABLE migration_log ADD COLUMN description TEXT;
+            END IF;
+        END $$;
+    """)
 
     # Lấy danh sách đã apply
     cur.execute("SELECT name FROM migration_log")
