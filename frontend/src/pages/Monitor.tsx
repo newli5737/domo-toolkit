@@ -198,7 +198,7 @@ export default function Monitor() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'failed': case 'FAILED': return <span className="badge badge-failed"><AlertTriangle className="w-3 h-3" /> {t('common.failed')}</span>
+      case 'failed': case 'FAILED': case 'ERROR': return <span className="badge badge-failed"><AlertTriangle className="w-3 h-3" /> {t('common.failed')}</span>
       case 'stale': return <span className="badge badge-stale"><Clock className="w-3 h-3" /> {t('common.stale')}</span>
       case 'no_update': return <span className="badge badge-gray"><Clock className="w-3 h-3" /> {t('common.noUpdate')}</span>
       case 'SUCCESS': return <span className="badge badge-success"><CheckCircle className="w-3 h-3" /> {t('common.ok')}</span>

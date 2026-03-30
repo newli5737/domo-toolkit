@@ -102,6 +102,8 @@ class MonitorService:
                     "provider_type": ds.get("dataProviderType", ds.get("type", "")),
                     "stream_id": str(ds.get("streamId", "")) if ds.get("streamId") else "",
                     "schedule_state": sched_state,
+                    "status": ds.get("status", ""),
+                    "state": ds.get("state", ""),
                     "last_updated": ds.get("lastUpdated"),
                 })
 
@@ -176,7 +178,8 @@ class MonitorService:
             "provider_type": provider_type,
             "stream_id": data.get("streamId", ""),
             "schedule_active": data.get("scheduleActive"),
-            "status": data.get("status"),
+            "status": data.get("status", ""),
+            "state": data.get("state", ""),
             "last_updated": data.get("lastUpdated"),
         }
 
@@ -541,6 +544,27 @@ class MonitorService:
                     dd["schedule_state"] = "ACTIVE"
                 elif sa is False:
                     dd["schedule_state"] = "INACTIVE"
+
+            # last_execution_state: lấy từ search API status/state hoặc detail API status/state
+            # Search API trả "status": "ERROR"/"SUCCESS", "state": "ERROR"/"SUCCESS"
+            # Ưu tiên: search_ds.state > search_ds.status > dd.state > dd.status
+            if not dd.get("last_execution_state"):
+                exec_state = (
+                    search_ds.get("state")
+                    or search_ds.get("status")
+                    or dd.get("state")
+                    or dd.get("status")
+                    or ""
+                )
+                if exec_state:
+                    dd["last_execution_state"] = exec_state
+
+        # Log thống kê last_execution_state
+        exec_states = {}
+        for dd in dataset_details:
+            st = dd.get("last_execution_state", "")
+            exec_states[st] = exec_states.get(st, 0) + 1
+        log.info(f"  [DEBUG] last_execution_state distribution: {exec_states}")
 
         self.save_datasets(dataset_details)
 
