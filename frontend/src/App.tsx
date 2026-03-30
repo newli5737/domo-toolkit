@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { apiGet } from './api'
+import { apiGet, apiPost } from './api'
 import { I18nProvider } from './i18n'
 import Sidebar from './components/Sidebar'
 import Dashboard from './pages/Dashboard'
@@ -35,6 +35,14 @@ export default function App() {
     setUsername(user)
   }
 
+  const handleLogout = async () => {
+    try {
+      await apiPost('/api/auth/logout')
+    } catch { /* ignore */ }
+    setLoggedIn(false)
+    setUsername('')
+  }
+
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
       const next = !prev
@@ -52,6 +60,7 @@ export default function App() {
             username={username}
             collapsed={sidebarCollapsed}
             onToggle={toggleSidebar}
+            onLogout={handleLogout}
           />
 
           <div className={`main-content flex-1 ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>

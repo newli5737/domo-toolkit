@@ -5,6 +5,7 @@ import {
   Activity,
   Settings,
   LogIn,
+  LogOut,
   User,
   CircleDot,
   Languages,
@@ -21,9 +22,10 @@ interface SidebarProps {
   username: string
   collapsed: boolean
   onToggle: () => void
+  onLogout?: () => void
 }
 
-export default function Sidebar({ loggedIn, username, collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ loggedIn, username, collapsed, onToggle, onLogout }: SidebarProps) {
   const location = useLocation()
   const { t, lang, setLang } = useI18n()
 
@@ -117,7 +119,7 @@ export default function Sidebar({ loggedIn, username, collapsed, onToggle }: Sid
         </button>
 
         {loggedIn ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0">
               <User className="w-4 h-4 text-slate-300" />
             </div>
@@ -130,6 +132,13 @@ export default function Sidebar({ loggedIn, username, collapsed, onToggle }: Sid
                 </div>
               </div>
             )}
+            <button
+              onClick={onLogout}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
+              title={collapsed ? 'Logout' : undefined}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         ) : (
           <Link to="/login" className="sidebar-link" title={collapsed ? t('common.login') : undefined}>

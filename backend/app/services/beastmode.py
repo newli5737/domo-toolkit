@@ -251,6 +251,11 @@ class BeastModeService:
         if not user_ids:
             return result
 
+        # Skip nếu không có auth (ví dụ reanalyze dùng dummy_auth)
+        if not self.api.auth.is_valid:
+            log.info("  ⚠️ Bỏ qua fetch_user_names: không có auth session")
+            return result
+
         # Batch requests (50 IDs per batch)
         batch_size = 50
         for i in range(0, len(user_ids), batch_size):

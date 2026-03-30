@@ -122,3 +122,27 @@ async def auth_status():
         "username": auth.username if auth.is_valid else "",
         "domo_url": f"https://{get_settings().domo_instance}",
     }
+
+
+@router.post("/logout")
+async def logout():
+    """Đăng xuất — xóa session cookie."""
+    global _auth
+    auth = get_auth()
+
+    # Clear auth object
+    auth._cookies = {}
+    auth._headers = {}
+    auth._csrf_token = ""
+    auth._logged_in_at = None
+    auth._username = ""
+
+    # Deactivate DB sessions
+    try:
+        db = get_db()
+        db.execute("UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE")
+        db.close()
+    except Exception:
+        pass
+
+    return {"success": True, "message": "Đã đăng xuất thành công"}
