@@ -20,6 +20,7 @@ class BeastModeService:
 
     SEARCH_URL = "/api/query/v1/functions/search"
     DETAIL_URL = "/api/query/v1/functions/template"
+    USERS_URL = "/api/content/v3/users"
 
 
 
@@ -239,6 +240,42 @@ class BeastModeService:
 
         log.info(f"Fetch details xong: {all_processed}/{total} (failed: {len(failed_ids)})")
 
+    # ─── Fetch User Names ─────────────────────────────────────
+
+    def fetch_user_names(self, user_ids: list[int]) -> dict:
+        """Batch-fetch user display names từ Domo API.
+        GET /api/content/v3/users?id=123&id=456
+        Returns: {user_id: display_name, ...}
+        """
+        result = {}
+        if not user_ids:
+            return result
+
+        # Batch requests (50 IDs per batch)
+        batch_size = 50
+        for i in range(0, len(user_ids), batch_size):
+            batch = user_ids[i:i + batch_size]
+            params = "&".join(f"id={uid}" for uid in batch)
+            url = f"{self.USERS_URL}?{params}"
+            try:
+                resp = self.api.get(url)
+                if resp and resp.status_code == 200:
+                    users = resp.json()
+                    if isinstance(users, list):
+                        for u in users:
+                            uid = u.get("id")
+                            name = u.get("displayName", "")
+                            if uid:
+                                result[uid] = name
+                    log.info(f"  Users batch {i//batch_size + 1}: resolved {len(users)} names")
+                else:
+                    log.error(f"  Users batch lỗi: status={resp.status_code if resp else 'None'}")
+            except Exception as e:
+                log.error(f"  Users batch lỗi: {e}")
+            time.sleep(0.2)
+
+        return result
+
     # ─── Phân tích 4 nhóm ────────────────────────────────────
 
     def analyze(self, low_view_threshold: int = 10) -> dict:
@@ -246,7 +283,7 @@ class BeastModeService:
         log.info("Bắt đầu phân tích...")
 
         # Lấy tất cả BM
-        all_bms = self.db.query("SELECT id, name, expression, datasources, legacy_id FROM beastmodes")
+        all_bms = self.db.query("SELECT id, name, expression, datasources, legacy_id, owner_id FROM beastmodes")
         log.info(f"  Tổng BM trong DB: {len(all_bms)}")
 
         # Map: bm_id → list card_ids (active)
@@ -267,6 +304,15 @@ class BeastModeService:
         cards = self.db.query("SELECT id, view_count FROM cards")
         card_views = {row["id"]: row["view_count"] or 0 for row in cards}
         log.info(f"  Cards with views: {len(cards)}")
+
+        # Resolve owner IDs → display names
+        owner_ids = set()
+        for bm in all_bms:
+            oid = bm.get("owner_id")
+            if oid:
+                owner_ids.add(int(oid))
+        owner_map = self.fetch_user_names(list(owner_ids)) if owner_ids else {}
+        log.info(f"  Resolved {len(owner_map)} owner names out of {len(owner_ids)} unique IDs")
 
         # Phân loại
         results = []
@@ -326,6 +372,8 @@ class BeastModeService:
                 "structure_hash": structure_hash,
                 "url": f"https://{self.api.auth.instance}/datacenter/beastmode?id={bm_id}",
                 "legacy_id": bm.get("legacy_id") or "",
+                "owner_name": owner_map.get(bm.get("owner_id"), ""),
+                "card_ids": "\n".join(str(c) for c in active_cards),
             }
             results.append(result_row)
 
@@ -846,8 +894,10 @@ class BeastModeService:
         rows = self.db.query(
             f"""SELECT a.bm_id, b.name as bm_name, b.legacy_id,
                       a.group_number, a.group_label,
+                      a.owner_name,
                       a.active_cards_count, a.total_views,
                       a.referenced_by_count, a.dataset_names,
+                      a.card_ids,
                       a.complexity_score,
                       a.duplicate_hash, a.normalized_hash, a.structure_hash,
                       a.url
@@ -858,9 +908,19 @@ class BeastModeService:
         )
         # Translate group_label theo lang
         label_map = self.GROUP_LABELS_JA if lang == 'ja' else self.GROUP_LABELS_VI
+        instance = self.api.auth.instance if self.api.auth else ""
         for row in rows:
             gnum = row.get('group_number') or 0
             if gnum in label_map:
                 row['group_label'] = label_map[gnum]
+            # Format card_ids: each card on its own line, with link
+            cids = row.get('card_ids') or ''
+            if cids and instance:
+                lines = []
+                for cid in cids.split('\n'):
+                    cid = cid.strip()
+                    if cid:
+                        lines.append(f"https://{instance}/page/1/kpis/details/{cid}")
+                row['card_ids'] = '\n'.join(lines)
         return rows
 

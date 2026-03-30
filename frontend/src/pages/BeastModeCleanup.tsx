@@ -49,6 +49,8 @@ interface BmRow {
   naming_flag: string
   complexity_score: number
   url: string
+  owner_name?: string
+  card_ids?: string
 }
 
 const GROUP_CONFIG_VI = [
@@ -667,6 +669,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Legacy ID</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? '名前' : 'Tên'}</th>
                         <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'グループ' : 'Nhóm'}</th>
+                        <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'オーナー' : 'Owner'}</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cards</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Views</th>
                         <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
@@ -701,7 +704,26 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
                                 {gcfg?.label ?? bm.group_label}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.active_cards_count}</td>
+                            <td className="px-4 py-3 text-xs text-gray-400 max-w-[120px] truncate" title={bm.owner_name || '—'}>{bm.owner_name || '—'}</td>
+                            <td className="px-4 py-3 text-right">
+                              {bm.card_ids ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {bm.card_ids.split('\n').filter(Boolean).map((cid, ci) => (
+                                    <a
+                                      key={ci}
+                                      href={`https://astecpaints-co-jp.domo.com/page/1/kpis/details/${cid.trim()}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[10px] text-[var(--color-accent-cyan)] hover:underline font-mono"
+                                    >
+                                      #{cid.trim()}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-500">{bm.active_cards_count}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.total_views.toLocaleString()}</td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.referenced_by_count}</td>
                             <td className="px-4 py-3 text-right text-sm text-gray-400">{bm.complexity_score}</td>

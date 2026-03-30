@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, ExternalLink, CheckCircle, AlertTriangle, PlayCircle, Mail, Loader, Save, Clock, Calendar } from 'lucide-react'
+import { Settings as SettingsIcon, ExternalLink, CheckCircle, AlertTriangle, PlayCircle, Mail, Loader, Save, Clock, Calendar, ChevronDown } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
 import { useI18n } from '../i18n'
 
@@ -45,6 +45,7 @@ export default function Settings() {
   const [scheduleHour, setScheduleHour] = useState(8)
   const [scheduleMinute, setScheduleMinute] = useState(0)
   const [scheduleDays, setScheduleDays] = useState('mon,tue,wed,thu,fri')
+  const [providerTypes, setProviderTypes] = useState<string[]>([])
 
   useEffect(() => {
     apiGet<AutoCheckConfig>('/api/monitor/auto-check-config')
@@ -58,6 +59,10 @@ export default function Settings() {
         setScheduleMinute(d.schedule_minute ?? 0)
         setScheduleDays(d.schedule_days ?? 'mon,tue,wed,thu,fri')
       })
+      .catch(() => {})
+    // Load provider types for select dropdown
+    apiGet<{ provider_types: string[] }>('/api/monitor/provider-types')
+      .then(d => setProviderTypes(d.provider_types || []))
       .catch(() => {})
   }, [])
 
@@ -150,9 +155,16 @@ export default function Settings() {
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
                   {lang === 'vi' ? 'Import Type (điều kiện lọc)' : 'Import Type（フィルター条件）'}
                 </label>
-                <input type="text" value={providerType} onChange={e => setProviderType(e.target.value)}
-                  placeholder="mysql-ssh"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" />
+                <div className="relative">
+                  <select value={providerType} onChange={e => setProviderType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 appearance-none bg-white pr-8">
+                    <option value="">{lang === 'vi' ? 'Tất cả loại' : 'すべての種類'}</option>
+                    {providerTypes.map(pt => (
+                      <option key={pt} value={pt}>{pt}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">

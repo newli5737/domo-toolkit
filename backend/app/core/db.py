@@ -233,8 +233,12 @@ class DomoDatabase:
             naming_flag TEXT,
             complexity_score INTEGER DEFAULT 0,
             duplicate_hash TEXT,
+            normalized_hash TEXT,
+            structure_hash TEXT,
             url TEXT,
-            legacy_id TEXT
+            legacy_id TEXT,
+            owner_name TEXT,
+            card_ids TEXT
         """)
 
         # Lịch sử xóa BM — lưu state cũ card definition
@@ -269,44 +273,12 @@ class DomoDatabase:
             step_total INTEGER DEFAULT 0
         """)
 
-        # Migrate: add step columns if missing
+        # Chạy migrations (thêm columns mới, index, ...)
         try:
-            self.execute("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                                   WHERE table_name='crawl_jobs' AND column_name='current_step') THEN
-                        ALTER TABLE crawl_jobs ADD COLUMN current_step INTEGER DEFAULT 0;
-                        ALTER TABLE crawl_jobs ADD COLUMN total_steps INTEGER DEFAULT 5;
-                        ALTER TABLE crawl_jobs ADD COLUMN step_name TEXT DEFAULT '';
-                        ALTER TABLE crawl_jobs ADD COLUMN step_processed INTEGER DEFAULT 0;
-                        ALTER TABLE crawl_jobs ADD COLUMN step_total INTEGER DEFAULT 0;
-                    END IF;
-                END $$;
-            """)
-        except Exception:
-            pass
-
-        # Migrate: add new columns to datasets table
-        dataset_new_cols = [
-            ("column_count", "INTEGER DEFAULT 0"),
-            ("data_flow_count", "INTEGER DEFAULT 0"),
-            ("provider_type", "TEXT"),
-            ("stream_id", "TEXT"),
-            ("schedule_state", "TEXT"),
-            ("last_execution_state", "TEXT"),
-            ("updated_at", "TIMESTAMP DEFAULT NOW()"),
-        ]
-        for col_name, col_type in dataset_new_cols:
-            try:
-                self.execute(f"""
-                    DO $$
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                                       WHERE table_name='datasets' AND column_name='{col_name}') THEN
-                            ALTER TABLE datasets ADD COLUMN {col_name} {col_type};
-                        END IF;
-                    END $$;
-                """)
-            except Exception:
-                pass
+            from migrate_db import run_migrations
+            import psycopg2
+            conn = psycopg2.connect(**self._conn_params)
+            run_migrations(conn)
+            conn.close()
+        except Exception as e:
+            print(f"⚠️ Migration warning: {e}")

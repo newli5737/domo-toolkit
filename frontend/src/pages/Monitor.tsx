@@ -530,6 +530,11 @@ export default function Monitor() {
                       return dsFilterCardDir === 'gte' ? c >= dsFilterCardVal : c < dsFilterCardVal
                     })
                     .sort((a, b) => {
+                      // Status priority: FAILED/ERROR first
+                      const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
+                      const aPri = statusPri(a.last_execution_state || '')
+                      const bPri = statusPri(b.last_execution_state || '')
+                      if (aPri !== bPri) return aPri - bPri
                       const av = a[dsSortBy] ?? ''
                       const bv = b[dsSortBy] ?? ''
                       const cmp = typeof av === 'number' && typeof bv === 'number'
@@ -599,6 +604,12 @@ export default function Monitor() {
                   )}
                   {dataflows
                     .filter(df => !dfSearch.trim() || df.name?.toLowerCase().includes(dfSearch.trim().toLowerCase()))
+                    .sort((a, b) => {
+                      const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
+                      const aPri = statusPri(a.last_execution_state || '')
+                      const bPri = statusPri(b.last_execution_state || '')
+                      return aPri - bPri
+                    })
                     .map((df, idx) => (
                     <tr key={df.id}>
                       <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
