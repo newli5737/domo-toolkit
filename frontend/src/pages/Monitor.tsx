@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Activity,
   Play,
@@ -11,6 +12,7 @@ import {
   Filter,
   Loader,
   Download,
+  Search,
 } from 'lucide-react'
 import { apiPost, apiGet } from '../api'
 import { useI18n } from '../i18n'
@@ -55,15 +57,26 @@ interface DataflowRow {
 }
 
 type Tab = 'overview' | 'datasets' | 'dataflows'
+const VALID_TABS: Tab[] = ['overview', 'datasets', 'dataflows']
 
 export default function Monitor() {
   const { t, lang } = useI18n()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [crawling, setCrawling] = useState(false)
   const [crawlType, setCrawlType] = useState('')
   const [result, setResult] = useState<CheckResult | null>(null)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<Tab>('overview')
+
+  // Tab state từ URL param — giữ khi F5
+  const tab = (VALID_TABS.includes(searchParams.get('tab') as Tab)
+    ? searchParams.get('tab') as Tab
+    : 'overview')
+  const setTab = (t: Tab) => setSearchParams({ tab: t }, { replace: true })
+
+  // Search state
+  const [dsSearch, setDsSearch] = useState('')
+  const [dfSearch, setDfSearch] = useState('')
   const [progress, setProgress] = useState<{ step: string; processed: number; total: number; percent: number } | null>(null)
 
   // DOMO instance for links
@@ -436,6 +449,14 @@ export default function Monitor() {
             <div className="card-header flex items-center justify-between">
               <span className="flex items-center gap-2"><Database className="w-4 h-4 text-blue-500" /> {t('monitor.tab.datasets')} ({dsTotal})</span>
               <div className="flex items-center gap-3">
+                {/* Search by name */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input type="text" value={dsSearch}
+                    onChange={e => setDsSearch(e.target.value)}
+                    placeholder={lang === 'vi' ? 'Tìm theo tên...' : '名前で検索...'}
+                    className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 w-48" />
+                </div>
                 {/* Provider type filter */}
                 <div className="relative">
                   <select value={dsFilterType} onChange={e => setDsFilterType(e.target.value)}
@@ -500,6 +521,7 @@ export default function Monitor() {
                     <tr><td colSpan={7} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {datasets
+                    .filter(ds => !dsSearch.trim() || ds.name?.toLowerCase().includes(dsSearch.trim().toLowerCase()))
                     .filter(ds => !dsFilterType || ds.provider_type === dsFilterType)
                     .filter(ds => {
                       if (!dsFilterCardDir) return true
@@ -544,7 +566,15 @@ export default function Monitor() {
           <div className="card">
             <div className="card-header flex items-center justify-between">
               <span className="flex items-center gap-2"><GitBranch className="w-4 h-4 text-purple-500" /> {t('monitor.tab.dataflows')} ({dfTotal})</span>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-3">
+                {/* Search by name */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input type="text" value={dfSearch}
+                    onChange={e => setDfSearch(e.target.value)}
+                    placeholder={lang === 'vi' ? 'Tìm theo tên...' : '名前で検索...'}
+                    className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 w-48" />
+                </div>
                 <button onClick={crawlDataflows} disabled={loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
                   {crawlType === 'dataflows' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDataflows')}
@@ -564,7 +594,9 @@ export default function Monitor() {
                   {dataflows.length === 0 && (
                     <tr><td colSpan={6} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
-                  {dataflows.map(df => (
+                  {dataflows
+                    .filter(df => !dfSearch.trim() || df.name?.toLowerCase().includes(dfSearch.trim().toLowerCase()))
+                    .map(df => (
                     <tr key={df.id}>
                       <td className="font-medium max-w-[300px] truncate">{df.name}</td>
                       <td>
