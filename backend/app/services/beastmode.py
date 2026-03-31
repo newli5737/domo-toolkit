@@ -752,45 +752,42 @@ class BeastModeService:
         return {"success": True, "removed": removed_count, "card_id": card_id}
 
     def delete_bm(self, bm_id: int) -> dict:
-        """Orchestrate xóa BM: lấy detail → tìm cards → gỡ khỏi từng card."""
-        log.info(f"=== Bắt đầu xóa BM #{bm_id} ===")
-
-        # Lấy BM detail
+        """Xóa BM trực tiếp bằng DELETE request như test_delete.py"""
+        log.info(f"=== Bắt đầu xóa trực tiếp BM #{bm_id} ===")
+        
+        # Get BM Detail first to get the name for logging
         detail = self.get_bm_detail(bm_id)
-        if not detail:
-            return {"success": False, "error": f"Không lấy được BM detail #{bm_id}"}
+        bm_name = detail.get("name", f"BM #{bm_id}") if detail else f"BM #{bm_id}"
+        legacy_id = detail.get("legacyId", "") if detail else ""
 
-        legacy_id = detail.get("legacyId", "")
-        bm_name = detail.get("name", "")
-        links = detail.get("links", [])
-
-        log.info(f"  BM: {bm_name} (legacy={legacy_id})")
-
-        # Tìm card IDs
-        card_ids = self._parse_card_ids_from_links(links)
-        if not card_ids:
-            return {"success": False, "error": f"BM #{bm_id} không có card nào liên kết"}
-
-        log.info(f"  Tìm thấy {len(card_ids)} cards: {card_ids}")
-
-        # Gỡ BM khỏi từng card
-        results = []
-        for card_id in card_ids:
-            result = self.remove_bm_from_card(card_id, bm_id, bm_name, legacy_id)
-            results.append(result)
-
-        success_count = sum(1 for r in results if r.get("success"))
-        log.info(f"=== Xóa BM #{bm_id} hoàn tất: {success_count}/{len(results)} cards ===")
-
-        return {
-            "success": success_count > 0,
-            "bm_id": bm_id,
-            "bm_name": bm_name,
-            "legacy_id": legacy_id,
-            "total_cards": len(card_ids),
-            "success_count": success_count,
-            "details": results,
+        url = f"{self.DETAIL_URL}/{bm_id}"
+        
+        csrf_token = self.api.auth.cookies.get("csrf-token", "")
+        extra_headers = {
+            "x-csrf-token": csrf_token,
+            "x-requested-with": "XMLHttpRequest",
+            "content-type": "application/json",
+            "accept": "application/json, text/plain, */*"
         }
+        
+        resp = self.api.delete(url, extra_headers=extra_headers)
+        
+        if resp and resp.status_code in (200, 204):
+            # Xóa khỏi DB cục bộ để sync
+            try:
+                self.db.execute("DELETE FROM beastmodes WHERE id = %s", (bm_id,))
+                self.db.execute("DELETE FROM bm_analysis WHERE bm_id = %s", (bm_id,))
+                self.db.execute("DELETE FROM bm_card_map WHERE bm_id = %s", (bm_id,))
+            except Exception as e:
+                log.warn(f"Lỗi xóa DB local: {e}")
+            log.success(f"=== Đã xóa thành công BM #{bm_id} ===")
+            return {"success": True, "bm_id": bm_id, "bm_name": bm_name, "legacy_id": legacy_id, "message": "Xóa thành công", "success_count": 1, "details":[]}
+        else:
+            status = resp.status_code if resp else "None"
+            body = resp.text[:500] if resp else ""
+            error_msg = f"DELETE thất bại (status={status}): {body}"
+            log.error(f"  ❌ {error_msg}")
+            return {"success": False, "bm_id": bm_id, "bm_name": bm_name, "error": error_msg}
 
     # ─── Helpers ──────────────────────────────────────────────
 

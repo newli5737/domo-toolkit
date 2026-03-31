@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { BmRow } from './types'
+import { useState, useEffect } from 'react'
+import type { BmRow } from './types'
 import { GROUP_CONFIG_JA, GROUP_CONFIG_VI, BADGE_BG } from './constants'
 import { useI18n } from '../../i18n'
 
@@ -32,6 +32,14 @@ export default function BeastModeTable({
   const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 50
+
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, bm: BmRow } | null>(null)
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    window.addEventListener('click', handleClick)
+    return () => window.removeEventListener('click', handleClick)
+  }, [])
 
   const allData = searchResults ?? groupData
   const totalPages = Math.ceil(allData.length / PAGE_SIZE)
@@ -122,7 +130,12 @@ export default function BeastModeTable({
                   const gcfg = GROUP_CONFIG.find(g => g.num === bm.group_number)
                   const badgeColor = gcfg?.color ?? 'cyan'
                   return (
-                    <tr key={bm.bm_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-white/[0.02] transition-colors">
+                    <tr key={bm.bm_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-white/[0.02] transition-colors"
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setContextMenu({ x: e.clientX, y: e.clientY, bm })
+                      }}
+                    >
                       <td className="px-4 py-3 text-xs font-mono text-gray-500">{bm.bm_id}</td>
                       <td className="px-4 py-3 text-xs font-mono text-gray-600 max-w-[120px] truncate" title={bm.legacy_id}>
                         {bm.legacy_id ? bm.legacy_id.replace('calculation_', '').slice(0, 8) + '…' : '—'}
@@ -224,6 +237,25 @@ export default function BeastModeTable({
           </>
         )}
       </div>
+      
+      {/* Context Menu */}
+      {contextMenu && (
+        <div 
+          className="fixed bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              setDeleteTarget(contextMenu.bm)
+              setContextMenu(null)
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-[var(--color-accent-red)] hover:bg-white/10 flex items-center gap-2"
+          >
+            🗑️ {lang === 'ja' ? '削除' : 'Xóa'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

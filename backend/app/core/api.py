@@ -71,6 +71,10 @@ class DomoAPI:
         url = f"{self._base_url}{path}" if path.startswith("/") else path
         return self._request("PUT", url, json=json, timeout=timeout, extra_headers=extra_headers)
 
+    def delete(self, path: str, timeout=60, extra_headers=None) -> requests.Response | None:
+        url = f"{self._base_url}{path}" if path.startswith("/") else path
+        return self._request("DELETE", url, timeout=timeout, extra_headers=extra_headers)
+
     # ─── Pagination helper ────────────────────────────────────
 
     def paginate(self, path: str, payload: dict, results_key: str,
