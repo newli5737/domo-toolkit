@@ -118,6 +118,20 @@ export default function Monitor() {
     </span>
   )
 
+  // Dataflow sort
+  const [dfSortBy, setDfSortBy] = useState<keyof DataflowRow>('last_execution_time')
+  const [dfSortOrder, setDfSortOrder] = useState<'ASC' | 'DESC'>('DESC')
+
+  const handleDfSort = (field: keyof DataflowRow) => {
+    if (dfSortBy === field) setDfSortOrder(o => o === 'ASC' ? 'DESC' : 'ASC')
+    else { setDfSortBy(field); setDfSortOrder('DESC') }
+  }
+  const DfSortIcon = ({ field }: { field: keyof DataflowRow }) => (
+    <span className="ml-0.5 text-[10px]">
+      {dfSortBy === field ? (dfSortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
+    </span>
+  )
+
   const loadDatasets = () => {
     apiGet<{ total: number; datasets: DatasetRow[] }>('/api/monitor/datasets?limit=2000')
       .then(d => {
@@ -595,7 +609,13 @@ export default function Monitor() {
               <table className="data-table">
                 <thead><tr>
                   <th className="w-12 text-center">#</th>
-                  <th>{t('common.name')}</th><th>{t('common.status')}</th><th>{t('monitor.lastExec')}</th>
+                  <th>{t('common.name')}</th>
+                  <th className="cursor-pointer hover:text-purple-500 select-none" onClick={() => handleDfSort('last_execution_state')}>
+                    {t('common.status')}<DfSortIcon field="last_execution_state" />
+                  </th>
+                  <th className="cursor-pointer hover:text-purple-500 select-none" onClick={() => handleDfSort('last_execution_time')}>
+                    {t('monitor.lastExec')}<DfSortIcon field="last_execution_time" />
+                  </th>
                   <th>{t('monitor.executions')}</th><th>{t('monitor.owner')}</th><th></th>
                 </tr></thead>
                 <tbody>
@@ -608,7 +628,13 @@ export default function Monitor() {
                       const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
                       const aPri = statusPri(a.last_execution_state || '')
                       const bPri = statusPri(b.last_execution_state || '')
-                      return aPri - bPri
+                      if (aPri !== bPri) return aPri - bPri
+                      const av = a[dfSortBy] ?? ''
+                      const bv = b[dfSortBy] ?? ''
+                      const cmp = typeof av === 'number' && typeof bv === 'number'
+                        ? av - bv
+                        : String(av).localeCompare(String(bv))
+                      return dfSortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map((df, idx) => (
                     <tr key={df.id}>
