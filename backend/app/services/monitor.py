@@ -52,7 +52,9 @@ class MonitorService:
                 "offset": offset,
                 "sort": {
                     "isRelevance": False,
-                    "fieldSorts": [{"field": "card_count", "sortOrder": "DESC"}]
+                    "fieldSorts": [
+                        {"field": "create_date", "sortOrder": "DESC"}
+                    ]
                 }
             }
 
