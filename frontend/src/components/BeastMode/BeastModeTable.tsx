@@ -35,13 +35,17 @@ export default function BeastModeTable({
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, bm: BmRow } | null>(null)
 
+  const [showCardFilter, setShowCardFilter] = useState(false)
+  const [cardIdFilter, setCardIdFilter] = useState('')
+
   useEffect(() => {
-    const handleClick = () => setContextMenu(null)
+    const handleClick = () => {
+      setContextMenu(null)
+      setShowCardFilter(false)
+    }
     window.addEventListener('click', handleClick)
     return () => window.removeEventListener('click', handleClick)
   }, [])
-
-  const [cardIdFilter, setCardIdFilter] = useState('')
 
   let allData = searchResults ?? groupData
   if (cardIdFilter.trim()) {
@@ -124,17 +128,41 @@ export default function BeastModeTable({
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? '名前' : 'Tên'}</th>
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'グループ' : 'Nhóm'}</th>
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'オーナー' : 'Owner'}</th>
-                  <th className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500 align-top">
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span>Cards</span>
-                      <input 
-                        type="text" 
-                        value={cardIdFilter} 
-                        onChange={e => { setCardIdFilter(e.target.value); setCurrentPage(1); }}
-                        placeholder="Lọc Card ID..."
-                        className="w-24 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-1.5 py-1 text-[9px] text-white outline-none focus:border-[var(--color-accent-cyan)] font-normal placeholder:text-gray-600 transition-colors"
-                      />
+                  <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500 relative select-none">
+                    <div 
+                      className="cursor-pointer hover:text-gray-300 flex items-center justify-end gap-1"
+                      onClick={() => setShowCardFilter(!showCardFilter)}
+                    >
+                      Cards
+                      <svg className={`w-3 h-3 transition-transform ${showCardFilter ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      {cardIdFilter && <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent-blue)]"></div>}
                     </div>
+                    
+                    {showCardFilter && (
+                      <div className="absolute right-0 top-full mt-2 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg shadow-xl p-3 z-50 w-56 flex flex-col gap-2 cursor-default" onClick={e => e.stopPropagation()}>
+                        <label className="text-xs text-left font-medium text-gray-300">Lọc theo Card ID</label>
+                        <input 
+                          type="text" 
+                          value={cardIdFilter} 
+                          onChange={e => { setCardIdFilter(e.target.value); setCurrentPage(1); }}
+                          placeholder="VD: 138667595"
+                          className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-xs text-white outline-none focus:border-[var(--color-accent-cyan)] transition-colors"
+                          autoFocus
+                        />
+                        <div className="flex justify-end mt-1">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setCardIdFilter('');
+                              setShowCardFilter(false);
+                            }}
+                            className="text-xs text-[var(--color-accent-red)] hover:text-red-400 font-medium px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                          >
+                            Xóa lọc (Rollback)
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </th>
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Views</th>
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
