@@ -136,7 +136,7 @@ export default function BeastModeTable({
                           value={cardIdFilter} 
                           onChange={e => { setCardIdFilter(e.target.value); setCurrentPage(1); }}
                           placeholder="VD: 138667595"
-                          className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-xs text-white outline-none focus:border-[var(--color-accent-cyan)] transition-colors"
+                          className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-xs text-black dark:text-white outline-none focus:border-[var(--color-accent-cyan)] transition-colors"
                           autoFocus
                         />
                         <div className="flex justify-end mt-1">
