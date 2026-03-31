@@ -57,7 +57,7 @@ export default function BeastModeTable({
           type="text"
           value={searchQuery}
           onChange={e => handleSearch(e.target.value)}
-          placeholder={lang === 'ja' ? '🔍 名前またはIDで検索...' : '🔍 Tìm theo tên hoặc ID...'}
+          placeholder={lang === 'ja' ? '🔍 名前、BM ID、またはCard IDで検索...' : '🔍 Tìm theo tên, BM ID hoặc Card ID...'}
           className="w-full px-5 py-3 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border)] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[var(--color-accent-cyan)] focus:shadow-[0_0_0_2px] focus:shadow-[var(--color-accent-cyan)]/10 transition-all"
         />
         {searching && (
