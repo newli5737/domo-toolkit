@@ -122,6 +122,7 @@ class CardService:
             try:
                 cards_data = resp.json()
                 if isinstance(cards_data, list):
+                    params_list = []
                     for card in cards_data:
                         card_id = card.get("id")
                         view_info = card.get("viewInfo", {})
@@ -129,23 +130,25 @@ class CardService:
                         ds = datasources[0] if datasources else {}
 
                         if card_id:
-                            self.db.execute(
-                                """UPDATE cards SET
-                                   view_count = %s,
-                                   last_viewed_at = CASE WHEN %s > 0 THEN to_timestamp(%s / 1000.0) ELSE NULL END,
-                                   datasource_id = %s,
-                                   datasource_name = %s
-                                   WHERE id = %s""",
-                                (
-                                    view_info.get("totalViewCount", 0),
-                                    view_info.get("lastViewedDate", 0),
-                                    view_info.get("lastViewedDate", 0),
-                                    ds.get("dataSourceId"),
-                                    ds.get("dataSourceName"),
-                                    str(card_id),
-                                )
-                            )
-                            updated += 1
+                            params_list.append((
+                                view_info.get("totalViewCount", 0),
+                                view_info.get("lastViewedDate", 0),
+                                view_info.get("lastViewedDate", 0),
+                                ds.get("dataSourceId"),
+                                ds.get("dataSourceName"),
+                                str(card_id),
+                            ))
+
+                    if params_list:
+                        sql = """UPDATE cards SET
+                                 view_count = %s,
+                                 last_viewed_at = CASE WHEN %s > 0 THEN to_timestamp(%s / 1000.0) ELSE NULL END,
+                                 datasource_id = %s,
+                                 datasource_name = %s
+                                 WHERE id = %s"""
+                        self.db.execute_batch(sql, params_list)
+                        updated += len(params_list)
+
             except Exception as e:
                 log.error(f"Parse viewInfo/datasources lỗi: {e}")
                 errors += 1

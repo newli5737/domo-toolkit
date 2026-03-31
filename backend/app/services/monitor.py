@@ -500,7 +500,7 @@ class MonitorService:
         raw_datasets = self.crawl_all_datasets()
 
         # Fetch detail in parallel
-        dataset_details = []
+        dataset_details_map = {}
         ds_ids = [str(ds.get("dataSourceId", ds.get("id", ""))) for ds in raw_datasets]
         log.info(f"  Fetching detail cho {len(ds_ids)} datasets ({max_workers} workers)...")
 
@@ -517,56 +517,60 @@ class MonitorService:
                 try:
                     result = future.result()
                     if result:
-                        dataset_details.append(result)
+                        dataset_details_map[result["id"]] = result
                 except Exception as e:
                     log.error(f"  Fetch dataset detail lỗi: {e}")
 
-        # Merge dữ liệu từ search API (chính xác hơn) vào detail results
-        search_map = {str(ds.get("id", "")): ds for ds in raw_datasets}
-        for dd in dataset_details:
-            dd_id = str(dd.get("id", ""))
-            search_ds = search_map.get(dd_id, {})
+        # Merge dữ liệu từ search API (chính xác hơn) với detail results
+        final_datasets = []
+        exec_states = {}
+        for search_ds in raw_datasets:
+            ds_id = search_ds["id"]
+            dd = dataset_details_map.get(ds_id)
             
+            if dd:
+                # Merge detail info vào search_ds
+                for k, v in dd.items():
+                    if v is not None and v != "":
+                        search_ds[k] = v
+
             # provider_type: search API trả đúng (mysql-ssh, DataFlow...),
-            # detail API luôn trả STANDARD
             search_pt = search_ds.get("provider_type", "")
             if search_pt and search_pt not in ("STANDARD", "STANDARD_OAUTH"):
-                dd["provider_type"] = search_pt
-            
-            # schedule_state: search API có, detail API không trả
-            if not dd.get("schedule_state") and search_ds.get("schedule_state"):
-                dd["schedule_state"] = search_ds["schedule_state"]
+                pass  # Keep search_pt 
+            else:
+                search_ds["provider_type"] = dd.get("provider_type", "") if dd else ""
             
             # Convert schedule_active (bool) → schedule_state nếu vẫn chưa có
-            if not dd.get("schedule_state"):
+            if not search_ds.get("schedule_state") and dd:
                 sa = dd.get("schedule_active")
                 if sa is True:
-                    dd["schedule_state"] = "ACTIVE"
+                    search_ds["schedule_state"] = "ACTIVE"
                 elif sa is False:
-                    dd["schedule_state"] = "INACTIVE"
+                    search_ds["schedule_state"] = "INACTIVE"
 
-            # last_execution_state: lấy từ search API status/state hoặc detail API status/state
-            # Search API trả "status": "ERROR"/"SUCCESS", "state": "ERROR"/"SUCCESS"
-            # Ưu tiên: search_ds.state > search_ds.status > dd.state > dd.status
-            if not dd.get("last_execution_state"):
+            # last_execution_state: lấy từ search API ưu tiên 
+            if not search_ds.get("last_execution_state"):
                 exec_state = (
                     search_ds.get("state")
                     or search_ds.get("status")
-                    or dd.get("state")
-                    or dd.get("status")
+                    or (dd.get("state") if dd else "")
+                    or (dd.get("status") if dd else "")
                     or ""
                 )
                 if exec_state:
-                    dd["last_execution_state"] = exec_state
+                    search_ds["last_execution_state"] = exec_state
+
+            final_datasets.append(search_ds)
+            st = search_ds.get("last_execution_state", "")
+            exec_states[st] = exec_states.get(st, 0) + 1
 
         # Log thống kê last_execution_state
-        exec_states = {}
-        for dd in dataset_details:
-            st = dd.get("last_execution_state", "")
-            exec_states[st] = exec_states.get(st, 0) + 1
         log.info(f"  [DEBUG] last_execution_state distribution: {exec_states}")
 
-        self.save_datasets(dataset_details)
+        self.save_datasets(final_datasets)
+        # Đồng bộ dataset_details để filter ở phía dưới chạy đúng
+        dataset_details = final_datasets
 
         # ─── Phase 2: Crawl & save dataflows ──────────────────
         log.info("Phase 2: Crawl dataflows...")

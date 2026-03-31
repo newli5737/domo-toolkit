@@ -23,7 +23,7 @@ DAY_MAP = {
 
 def _run_auto_check():
     """Execute the auto-check logic (crawl + check + alert)."""
-    print("[SCHEDULER] ⏰ Auto-check triggered by cron")
+    log.info("⏰ Auto-check triggered by cron")
     try:
         from app.routers.monitor import trigger_auto_check, AutoCheckRequest, _load_alert_config
         config = _load_alert_config()
@@ -33,36 +33,32 @@ def _run_auto_check():
             provider_type=config.get("provider_type", "mysql-ssh"),
         )
         result = trigger_auto_check(req)
-        print(f"[SCHEDULER] ✅ Auto-check done: {result}")
+        log.info(f"✅ Auto-check done: {result}")
     except Exception as e:
-        print(f"[SCHEDULER] ❌ Auto-check error: {e}")
-        import traceback
-        traceback.print_exc()
+        log.error(f"❌ Auto-check error: {e}", exc_info=True)
 
 
 def _run_domo_relogin():
     """Re-login DOMO lúc 0h00 mỗi ngày — session chỉ có hiệu lực 1 ngày."""
-    print("[SCHEDULER] ⏰ DOMO midnight re-login triggered")
+    log.info("⏰ DOMO midnight re-login triggered")
     try:
         from app.config import get_settings
         from app.routers.auth import get_auth, _save_session
 
         settings = get_settings()
         if not settings.domo_username or not settings.domo_password:
-            print("[SCHEDULER] ⚠️ DOMO credentials chưa cấu hình trong .env, bỏ qua.")
+            log.warning("⚠️ DOMO credentials chưa cấu hình trong .env, bỏ qua.")
             return
 
         auth = get_auth()
         result = auth.login(settings.domo_username, settings.domo_password)
         if result["success"]:
             _save_session(auth)
-            print(f"[SCHEDULER] ✅ DOMO re-login thành công: {auth.username}")
+            log.info(f"✅ DOMO re-login thành công: {auth.username}")
         else:
-            print(f"[SCHEDULER] ❌ DOMO re-login thất bại: {result['message']}")
+            log.error(f"❌ DOMO re-login thất bại: {result['message']}")
     except Exception as e:
-        print(f"[SCHEDULER] ❌ DOMO re-login error: {e}")
-        import traceback
-        traceback.print_exc()
+        log.error(f"❌ DOMO re-login error: {e}", exc_info=True)
 
 
 
@@ -74,7 +70,7 @@ def init_scheduler(config: dict | None = None):
 
     _scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
     _scheduler.start()
-    print("[SCHEDULER] 🚀 Scheduler started (Asia/Tokyo)")
+    log.info("🚀 Scheduler started (Asia/Tokyo)")
 
     # ── Midnight re-login jobs (0h00 JST mỗi ngày) ──
     _scheduler.add_job(
@@ -84,7 +80,7 @@ def init_scheduler(config: dict | None = None):
         name="DOMO Midnight Re-Login",
         replace_existing=True,
     )
-    print("[SCHEDULER] ✅ DOMO midnight re-login job đã đăng ký (00:00 JST)")
+    log.info("✅ DOMO midnight re-login job đã đăng ký (00:00 JST)")
 
     if config is None:
         try:
@@ -107,13 +103,13 @@ def update_schedule(config: dict):
     # Remove existing job if any
     try:
         _scheduler.remove_job(job_id)
-        print(f"[SCHEDULER] Removed old job '{job_id}'")
+        log.info(f"Removed old job '{job_id}'")
     except Exception:
         pass
 
     enabled = config.get("schedule_enabled", False)
     if not enabled:
-        print("[SCHEDULER] Schedule disabled, no job created")
+        log.info("Schedule disabled, no job created")
         return
 
     hour = config.get("schedule_hour", 8)
@@ -135,7 +131,7 @@ def update_schedule(config: dict):
         name="Domo Auto-Check (Dataset + Dataflow)",
         replace_existing=True,
     )
-    print(f"[SCHEDULER] ✅ Job scheduled: {days} at {hour:02d}:{minute:02d} JST")
+    log.info(f"✅ Job scheduled: {days} at {hour:02d}:{minute:02d} JST")
 
 
 def shutdown_scheduler():
@@ -144,4 +140,4 @@ def shutdown_scheduler():
     if _scheduler:
         _scheduler.shutdown(wait=False)
         _scheduler = None
-        print("[SCHEDULER] Scheduler shut down")
+        log.info("Scheduler shut down")

@@ -48,14 +48,16 @@ app.include_router(card.router)
 def startup():
     """Tạo bảng DB khi khởi động + auto-login nếu có cấu hình."""
     settings = get_settings()
-    db = DomoDatabase(
+    
+    # Init DB Connection Pool
+    DomoDatabase.init_pool(
         host=settings.db_host, port=settings.db_port,
         dbname=settings.db_name, user=settings.db_user,
-        password=settings.db_password,
+        password=settings.db_password, maxconn=20
     )
+    db = DomoDatabase()
     db.init_schema()
-    db.close()
-    print(f"✅ DB schema initialized ({settings.db_name})")
+    print(f"✅ DB schema initialized ({settings.db_name}) with pooling")
 
     # Hủy các crawl job cũ đang bị treo
     from app.routers.beastmode import cleanup_stale_jobs
@@ -81,6 +83,8 @@ def startup():
 def shutdown():
     from app.scheduler import shutdown_scheduler
     shutdown_scheduler()
+    DomoDatabase.close_pool()
+    print("🛑 Đóng Database pool và Scheduler thành công.")
 
 @app.get("/api/health")
 def health():

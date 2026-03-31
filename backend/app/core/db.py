@@ -4,36 +4,49 @@ import json
 import psycopg2
 import psycopg2.extras
 from contextlib import contextmanager
+from psycopg2.pool import ThreadedConnectionPool
 
 
 class DomoDatabase:
-    """PostgreSQL wrapper — upsert, bulk ops, và schema management."""
+    """PostgreSQL wrapper — upsert, bulk ops, schema management, using Connection Pool."""
 
-    def __init__(self, host: str, port: int, dbname: str, user: str, password: str):
-        self._conn_params = {
-            "host": host,
-            "port": port,
-            "dbname": dbname,
-            "user": user,
-            "password": password,
-        }
-        self._conn = None
+    _pool = None
+
+    @classmethod
+    def init_pool(cls, host: str, port: int, dbname: str, user: str, password: str, minconn: int = 1, maxconn: int = 20):
+        if cls._pool is None:
+            cls._pool = ThreadedConnectionPool(
+                minconn, maxconn,
+                host=host, port=port, dbname=dbname, user=user, password=password
+            )
+
+    @classmethod
+    def close_pool(cls):
+        if cls._pool:
+            cls._pool.closeall()
+            cls._pool = None
+
+    def __init__(self, host: str = "", port: int = 5432, dbname: str = "", user: str = "", password: str = ""):
+        # Để trống do các instance sẽ chia sẻ _pool chung ở class level.
+        # Signature giữ nguyên để không làm vỡ các router đang truyền tham số.
+        pass
 
     def connect(self):
-        """Mở connection."""
-        if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(**self._conn_params)
-            self._conn.autocommit = False
-        return self._conn
+        """Không nên gọi trực tiếp khi dùng pool, nhưng cung cấp để tương thích ngược."""
+        if self._pool is None:
+            raise RuntimeError("Database pool not initialized")
+        return self._pool.getconn()
 
     def close(self):
-        if self._conn and not self._conn.closed:
-            self._conn.close()
+        """Không còn tác dụng đóng tcp connection, việc trả conn sẽ được handle tự động trong cursor()"""
+        pass
 
     @contextmanager
     def cursor(self):
         """Context manager cho cursor."""
-        conn = self.connect()
+        if self._pool is None:
+            raise RuntimeError("Database pool not initialized")
+        conn = self._pool.getconn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         try:
             yield cur
@@ -43,11 +56,17 @@ class DomoDatabase:
             raise
         finally:
             cur.close()
+            self._pool.putconn(conn)
 
     def execute(self, sql: str, params=None):
         """Chạy SQL statement."""
         with self.cursor() as cur:
             cur.execute(sql, params)
+
+    def execute_batch(self, sql: str, params_list: list[tuple], page_size: int = 100):
+        """Batch update / Batch execute sử dụng execute_batch."""
+        with self.cursor() as cur:
+            psycopg2.extras.execute_batch(cur, sql, params_list, page_size=page_size)
 
     def query(self, sql: str, params=None) -> list[dict]:
         """Chạy SELECT, trả về list of dict."""
@@ -276,9 +295,10 @@ class DomoDatabase:
         # Chạy migrations (thêm columns mới, index, ...)
         try:
             from migrate_db import run_migrations
-            import psycopg2
-            conn = psycopg2.connect(**self._conn_params)
-            run_migrations(conn)
-            conn.close()
+            conn = self._pool.getconn()
+            try:
+                run_migrations(conn)
+            finally:
+                self._pool.putconn(conn)
         except Exception as e:
             print(f"⚠️ Migration warning: {e}")
