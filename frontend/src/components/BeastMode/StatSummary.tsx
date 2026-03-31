@@ -1,4 +1,4 @@
-import { Summary } from './types'
+import type { Summary } from './types'
 import { COLOR_MAP, TEXT_COLOR, GROUP_CONFIG_JA, GROUP_CONFIG_VI } from './constants'
 import { useI18n } from '../../i18n'
 

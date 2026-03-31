@@ -1,4 +1,4 @@
-import { CrawlProgress } from './types'
+import type { CrawlProgress } from './types'
 import { STEP_ICONS, formatTime, estimateRemaining } from './constants'
 import { useI18n } from '../../i18n'
 
