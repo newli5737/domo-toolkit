@@ -106,22 +106,9 @@ export default function BeastModeTable({
 
       {/* Table */}
       <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-        {(loadingGroup || searching) ? (
-          <div className="p-12 text-center">
-            <div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-accent-cyan)] rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">{lang === 'ja' ? '読み込み中...' : 'Đang tải...'}</p>
-          </div>
-        ) : allData.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-sm">
-            {searchResults !== null
-              ? (lang === 'ja' ? 'Beast Modeが見つかりません' : 'Không tìm thấy Beast Mode nào')
-              : (lang === 'ja' ? 'このグループにBeast Modeはありません' : 'Không có Beast Mode nào trong nhóm này')}
-          </div>
-        ) : (
-          <>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">ID</th>
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Legacy ID</th>
@@ -174,7 +161,25 @@ export default function BeastModeTable({
                 </tr>
               </thead>
               <tbody>
-                {pageData.map(bm => {
+                {(loadingGroup || searching) ? (
+                  <tr>
+                    <td colSpan={10} className="p-12 text-center">
+                      <div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-accent-cyan)] rounded-full animate-spin mx-auto" />
+                      <p className="text-sm text-gray-500 mt-3">{lang === 'ja' ? '読み込み中...' : 'Đang tải...'}</p>
+                    </td>
+                  </tr>
+                ) : allData.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="p-12 text-center text-gray-500 text-sm">
+                      {searchResults !== null
+                        ? (lang === 'ja' ? 'Beast Modeが見つかりません' : 'Không tìm thấy Beast Mode nào')
+                        : cardIdFilter
+                          ? (lang === 'ja' ? 'このCard IDを持つBeast Modeはありません' : `Không có Beast Mode nào liên kết với Card ID ${cardIdFilter}`)
+                          : (lang === 'ja' ? 'このグループにBeast Modeはありません' : 'Không có Beast Mode nào trong nhóm này')}
+                    </td>
+                  </tr>
+                ) : (
+                  pageData.map(bm => {
                   const gcfg = GROUP_CONFIG.find(g => g.num === bm.group_number)
                   const badgeColor = gcfg?.color ?? 'cyan'
                   return (
@@ -240,7 +245,8 @@ export default function BeastModeTable({
                       </td>
                     </tr>
                   )
-                })}
+                })
+              )}
               </tbody>
             </table>
           </div>
@@ -282,9 +288,7 @@ export default function BeastModeTable({
               </div>
             </div>
           )}
-          </>
-        )}
-      </div>
+        </div>
       
       {/* Context Menu */}
       {contextMenu && (
