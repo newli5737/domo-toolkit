@@ -41,7 +41,13 @@ export default function BeastModeTable({
     return () => window.removeEventListener('click', handleClick)
   }, [])
 
-  const allData = searchResults ?? groupData
+  const [cardIdFilter, setCardIdFilter] = useState('')
+
+  let allData = searchResults ?? groupData
+  if (cardIdFilter.trim()) {
+    allData = allData.filter(bm => bm.card_ids && bm.card_ids.includes(cardIdFilter.trim()))
+  }
+
   const totalPages = Math.ceil(allData.length / PAGE_SIZE)
   const pageData = allData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
@@ -57,7 +63,7 @@ export default function BeastModeTable({
           type="text"
           value={searchQuery}
           onChange={e => handleSearch(e.target.value)}
-          placeholder={lang === 'ja' ? '🔍 名前、BM ID、またはCard IDで検索...' : '🔍 Tìm theo tên, BM ID hoặc Card ID...'}
+          placeholder={lang === 'ja' ? '🔍 名前またはBM IDで検索...' : '🔍 Tìm theo tên hoặc BM ID...'}
           className="w-full px-5 py-3 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border)] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[var(--color-accent-cyan)] focus:shadow-[0_0_0_2px] focus:shadow-[var(--color-accent-cyan)]/10 transition-all"
         />
         {searching && (
@@ -118,7 +124,18 @@ export default function BeastModeTable({
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? '名前' : 'Tên'}</th>
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'グループ' : 'Nhóm'}</th>
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">{lang === 'ja' ? 'オーナー' : 'Owner'}</th>
-                  <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cards</th>
+                  <th className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500 align-top">
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span>Cards</span>
+                      <input 
+                        type="text" 
+                        value={cardIdFilter} 
+                        onChange={e => { setCardIdFilter(e.target.value); setCurrentPage(1); }}
+                        placeholder="Lọc Card ID..."
+                        className="w-24 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded px-1.5 py-1 text-[9px] text-white outline-none focus:border-[var(--color-accent-cyan)] font-normal placeholder:text-gray-600 transition-colors"
+                      />
+                    </div>
+                  </th>
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Views</th>
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Refs</th>
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Complexity</th>
