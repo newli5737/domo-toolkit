@@ -53,7 +53,10 @@ class MonitorService:
                 "sort": {
                     "isRelevance": False,
                     "fieldSorts": [
-                        {"field": "create_date", "sortOrder": "DESC"}
+                        {
+                            "field": "card_count",
+                            "sortOrder": "DESC"
+                        }
                     ]
                 }
             }
