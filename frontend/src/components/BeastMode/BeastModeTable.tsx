@@ -131,7 +131,10 @@ export default function BeastModeTable({
                   <th className="px-4 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500 relative select-none">
                     <div 
                       className="cursor-pointer hover:text-gray-300 flex items-center justify-end gap-1"
-                      onClick={() => setShowCardFilter(!showCardFilter)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCardFilter(!showCardFilter);
+                      }}
                     >
                       Cards
                       <svg className={`w-3 h-3 transition-transform ${showCardFilter ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
