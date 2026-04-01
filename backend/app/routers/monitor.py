@@ -287,6 +287,8 @@ def crawl_datasets_only(
 
             def fetch_execution_state(ds):
                 ds_id = ds["id"]
+                # dataset_status: trạng thái dataset (VALID, IDLE...) — từ search API
+                ds["dataset_status"] = ds.get("state", "") or ds.get("status", "")
                 try:
                     # Get detail to retrieve streamId + accurate provider_type
                     detail = service.fetch_dataset_detail(ds_id)
@@ -297,10 +299,15 @@ def crawl_datasets_only(
                         if detail.get("row_count") is not None:
                             ds["row_count"] = detail["row_count"]
 
+                        # Cập nhật dataset_status từ detail nếu có
+                        detail_status = detail.get("state", "") or detail.get("status", "")
+                        if detail_status:
+                            ds["dataset_status"] = detail_status
+
                         stream_id = detail.get("stream_id", "")
                         if stream_id:
                             ds["stream_id"] = str(stream_id)
-                            # Fetch schedule via stream
+                            # Fetch schedule via stream — lấy EXECUTION state (SUCCESS/ERROR)
                             schedule = service.fetch_dataset_schedule(stream_id)
                             if schedule:
                                 last_exec = schedule.get("last_execution")
@@ -318,20 +325,12 @@ def crawl_datasets_only(
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 executor.map(fetch_execution_state, dataset_details)
 
-            # DEBUG: in ra datasets có FAILED
-            for ds in dataset_details:
-                exec_st = ds.get("last_execution_state", "")
-                ds_status = ds.get("status", "")
-                ds_state = ds.get("state", "")
-                has_failed = (
-                    ("FAILED" in (exec_st or "").upper()) or
-                    ("FAILED" in (ds_status or "").upper()) or
-                    ("FAILED" in (ds_state or "").upper())
-                )
-                if has_failed:
-                    print(f"[CRAWL-DS-DEBUG] id={ds['id']}, name={ds.get('name','')[:40]}, "
-                          f"last_execution_state='{exec_st}', status='{ds_status}', state='{ds_state}', "
-                          f"last_updated={ds.get('last_updated')}, provider_type={ds.get('provider_type','')}")
+            # DEBUG: thống kê dataset_status vs last_execution_state
+            from collections import Counter
+            status_dist = Counter(ds.get("dataset_status", "") for ds in dataset_details)
+            exec_dist = Counter(ds.get("last_execution_state", "") for ds in dataset_details)
+            print(f"[CRAWL] dataset_status distribution: {dict(status_dist)}")
+            print(f"[CRAWL] last_execution_state distribution: {dict(exec_dist)}")
 
             print(f"[CRAWL] Phase 2 xong")
 
@@ -500,8 +499,8 @@ def list_datasets(
     params.extend([limit, offset])
     rows = db.query(
         f"""SELECT id, name, row_count, column_count, card_count, data_flow_count,
-                   provider_type, stream_id, schedule_state, last_execution_state,
-                   last_updated, updated_at
+                   provider_type, stream_id, schedule_state, dataset_status,
+                   last_execution_state, last_updated, updated_at
             FROM datasets
             WHERE {where_str}
             ORDER BY last_updated DESC NULLS LAST

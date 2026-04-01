@@ -45,8 +45,8 @@ interface CheckResult {
 interface DatasetRow {
   id: string; name: string; row_count: number; column_count: number;
   card_count: number; data_flow_count: number; provider_type: string;
-  stream_id: string; schedule_state: string; last_execution_state: string;
-  last_updated: string; updated_at: string;
+  stream_id: string; schedule_state: string; dataset_status: string;
+  last_execution_state: string; last_updated: string; updated_at: string;
 }
 
 interface DataflowRow {
@@ -517,8 +517,11 @@ export default function Monitor() {
                   <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('name')}>
                     {t('common.name')}<DsSortIcon field="name" />
                   </th>
+                  <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('dataset_status')}>
+                    {t('monitor.datasetStatus')}<DsSortIcon field="dataset_status" />
+                  </th>
                   <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('last_execution_state')}>
-                    {t('common.status')}<DsSortIcon field="last_execution_state" />
+                    {t('monitor.lastExecState')}<DsSortIcon field="last_execution_state" />
                   </th>
                   <th className="cursor-pointer hover:text-blue-500 select-none" onClick={() => handleDsSort('row_count')}>
                     {t('monitor.rows')}<DsSortIcon field="row_count" />
@@ -536,7 +539,7 @@ export default function Monitor() {
                 </tr></thead>
                 <tbody>
                   {datasets.length === 0 && (
-                    <tr><td colSpan={8} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
+                    <tr><td colSpan={9} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {datasets
                     .filter(ds => !dsSearch.trim() || ds.name?.toLowerCase().includes(dsSearch.trim().toLowerCase()))
@@ -563,7 +566,8 @@ export default function Monitor() {
                     <tr key={ds.id}>
                       <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
                       <td className="font-medium max-w-[300px] truncate">{ds.name}</td>
-                      <td>{getStatusBadge(ds.last_execution_state || ds.schedule_state || '')}</td>
+                      <td>{ds.dataset_status ? <span className="badge badge-gray">{ds.dataset_status}</span> : <span className="text-slate-300">-</span>}</td>
+                      <td>{ds.last_execution_state ? getStatusBadge(ds.last_execution_state) : <span className="text-slate-300">-</span>}</td>
                       <td>{ds.row_count?.toLocaleString() || '-'}</td>
                       <td>{ds.card_count || '-'}</td>
                       <td><span className="badge badge-gray">{ds.provider_type || '-'}</span></td>

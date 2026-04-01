@@ -76,6 +76,8 @@ const translations = {
   'monitor.executions': { vi: 'Lần chạy', ja: '実行回数' },
   'monitor.lastExec': { vi: 'Lần chạy cuối', ja: '最終実行' },
   'monitor.paused': { vi: 'Tạm dừng', ja: '一時停止' },
+  'monitor.datasetStatus': { vi: 'Trạng thái DS', ja: 'DSステータス' },
+  'monitor.lastExecState': { vi: 'Lần chạy cuối', ja: '最終実行結果' },
 
   // Login
   'login.title': { vi: 'Đăng nhập', ja: 'ログイン' },

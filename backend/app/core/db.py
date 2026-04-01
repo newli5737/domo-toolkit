@@ -207,6 +207,7 @@ class DomoDatabase:
             provider_type TEXT,
             stream_id TEXT,
             schedule_state TEXT,
+            dataset_status TEXT,
             last_execution_state TEXT,
             last_updated TIMESTAMP,
             updated_at TIMESTAMP DEFAULT NOW()

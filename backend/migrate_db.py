@@ -115,6 +115,15 @@ MIGRATIONS = [
             _add_col("bm_analysis", "structure_hash",  "TEXT"),
         ],
     ),
+
+    # ── v6: datasets thêm dataset_status (tách riêng với last_execution_state) ──
+    (
+        "v6_datasets_dataset_status",
+        "Thêm dataset_status vào datasets (trạng thái dataset: VALID/IDLE/DISABLED, tách khỏi execution state)",
+        [
+            _add_col("datasets", "dataset_status", "TEXT"),
+        ],
+    ),
 ]
 
 
