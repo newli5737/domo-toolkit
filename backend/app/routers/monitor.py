@@ -287,8 +287,15 @@ def crawl_datasets_only(
 
             def fetch_execution_state(ds):
                 ds_id = ds["id"]
-                # dataset_status: trạng thái dataset (VALID, IDLE...) — từ search API
-                ds["dataset_status"] = ds.get("state", "") or ds.get("status", "")
+                # dataset_status: trạng thái dataset → CHỈ lấy từ search API
+                # Search API trả: VALID, INACTIVE, ERROR (cho dataset bị lỗi hoàn toàn)
+                search_state = ds.get("state", "") or ds.get("status", "")
+                # Map INACTIVE → DISABLED cho dễ hiểu
+                if search_state.upper() == "INACTIVE":
+                    ds["dataset_status"] = "DISABLED"
+                else:
+                    ds["dataset_status"] = search_state
+
                 try:
                     # Get detail to retrieve streamId + accurate provider_type
                     detail = service.fetch_dataset_detail(ds_id)
@@ -299,10 +306,9 @@ def crawl_datasets_only(
                         if detail.get("row_count") is not None:
                             ds["row_count"] = detail["row_count"]
 
-                        # Cập nhật dataset_status từ detail nếu có
-                        detail_status = detail.get("state", "") or detail.get("status", "")
-                        if detail_status:
-                            ds["dataset_status"] = detail_status
+                        # Detail API `status` = execution result (SUCCESS/ERROR/OUTDATED)
+                        # KHÔNG phải dataset state! Dùng làm fallback cho last_execution_state
+                        detail_exec_status = detail.get("status", "")
 
                         stream_id = detail.get("stream_id", "")
                         if stream_id:
@@ -314,6 +320,10 @@ def crawl_datasets_only(
                                 if last_exec:
                                     ds["last_execution_state"] = last_exec.get("state", "")
                                 ds["schedule_state"] = schedule.get("schedule_state", ds.get("schedule_state", ""))
+
+                        # Fallback: nếu không có stream hoặc schedule, dùng detail.status
+                        if not ds.get("last_execution_state") and detail_exec_status:
+                            ds["last_execution_state"] = detail_exec_status
 
                     # DEBUG: in 1 dòng cho MỌI dataset
                     search_st = f"{ds.get('state','')}/{ds.get('status','')}"

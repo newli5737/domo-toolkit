@@ -571,21 +571,19 @@ class MonitorService:
                 elif sa is False:
                     search_ds["schedule_state"] = "INACTIVE"
 
-            # dataset_status: trạng thái của dataset (VALID, IDLE, ...)
-            # Lấy từ search API state/status — đây là trạng thái dataset, KHÔNG phải execution result
-            ds_status = (
-                search_ds.get("state")
-                or search_ds.get("status")
-                or (dd.get("state") if dd else "")
-                or (dd.get("status") if dd else "")
-                or ""
-            )
-            search_ds["dataset_status"] = ds_status
+            # dataset_status: trạng thái dataset → CHỈ từ search API
+            search_state = search_ds.get("state", "") or search_ds.get("status", "")
+            if search_state.upper() == "INACTIVE":
+                search_ds["dataset_status"] = "DISABLED"
+            else:
+                search_ds["dataset_status"] = search_state
 
-            # last_execution_state: kết quả lần chạy cập nhật cuối (SUCCESS, ERROR, FAILED...)
-            # Chỉ lấy từ Stream API (fetch_dataset_schedule) — không dùng state/status của dataset
-            # Trong check_health không fetch schedule nên để trống
-            # (chỉ có khi chạy Cào Datasets riêng mới có giá trị này)
+            # last_execution_state: trong check_health dùng detail.status làm fallback
+            # (detail API status = execution result, không phải dataset state)
+            if not search_ds.get("last_execution_state") and dd:
+                detail_exec = dd.get("status", "")
+                if detail_exec:
+                    search_ds["last_execution_state"] = detail_exec
 
             final_datasets.append(search_ds)
             st = search_ds.get("last_execution_state", "")
