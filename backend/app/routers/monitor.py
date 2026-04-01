@@ -292,8 +292,14 @@ def crawl_datasets_only(
                 try:
                     # Get detail to retrieve streamId + accurate provider_type
                     detail = service.fetch_dataset_detail(ds_id)
-                    if detail:
 
+                    # DEBUG: in raw detail cho 3 dataset đầu
+                    if done_count[0] < 3 and detail:
+                        print(f"[DEBUG-RAW-DETAIL] id={ds_id}, name={ds.get('name','')[:40]}")
+                        print(f"  search_api: state='{ds.get('state','')}', status='{ds.get('status','')}'")
+                        print(f"  detail_api: state='{detail.get('state','')}', status='{detail.get('status','')}'")
+
+                    if detail:
                         if detail.get("card_count") is not None:
                             ds["card_count"] = detail["card_count"]
                         if detail.get("row_count") is not None:
@@ -309,6 +315,17 @@ def crawl_datasets_only(
                             ds["stream_id"] = str(stream_id)
                             # Fetch schedule via stream — lấy EXECUTION state (SUCCESS/ERROR)
                             schedule = service.fetch_dataset_schedule(stream_id)
+
+                            # DEBUG: in raw schedule cho 3 dataset đầu
+                            if done_count[0] < 3 and schedule:
+                                last_exec = schedule.get("last_execution")
+                                last_succ = schedule.get("last_successful_execution")
+                                print(f"  schedule_api: schedule_state='{schedule.get('schedule_state','')}'")
+                                print(f"    last_execution={last_exec}")
+                                print(f"    last_successful_execution={last_succ}")
+                                print(f"    dataset_status='{schedule.get('dataset_status','')}'")
+                                print(f"    current_execution_state='{schedule.get('current_execution_state','')}'")
+
                             if schedule:
                                 last_exec = schedule.get("last_execution")
                                 if last_exec:

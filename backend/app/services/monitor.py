@@ -171,7 +171,9 @@ class MonitorService:
             log.info(f"  [DEBUG-DETAIL] id={dataset_id}, name={data.get('name','')[:40]}, "
                      f"FINAL='{provider_type}', displayType='{display_type}', "
                      f"dataProviderType='{data_provider_type}', dp.name='{dp_name}', "
-                     f"dp.type='{dp_type}', root.type='{root_type}'")
+                     f"dp.type='{dp_type}', root.type='{root_type}', "
+                     f"STATE='{data.get('state','')}', STATUS='{data.get('status','')}'")
+
 
         return {
             "id": str(data.get("id", dataset_id)),
