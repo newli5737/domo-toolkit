@@ -318,6 +318,21 @@ def crawl_datasets_only(
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 executor.map(fetch_execution_state, dataset_details)
 
+            # DEBUG: in ra datasets có FAILED
+            for ds in dataset_details:
+                exec_st = ds.get("last_execution_state", "")
+                ds_status = ds.get("status", "")
+                ds_state = ds.get("state", "")
+                has_failed = (
+                    ("FAILED" in (exec_st or "").upper()) or
+                    ("FAILED" in (ds_status or "").upper()) or
+                    ("FAILED" in (ds_state or "").upper())
+                )
+                if has_failed:
+                    print(f"[CRAWL-DS-DEBUG] id={ds['id']}, name={ds.get('name','')[:40]}, "
+                          f"last_execution_state='{exec_st}', status='{ds_status}', state='{ds_state}', "
+                          f"last_updated={ds.get('last_updated')}, provider_type={ds.get('provider_type','')}")
+
             print(f"[CRAWL] Phase 2 xong")
 
             # Phase 3: Save to DB  
