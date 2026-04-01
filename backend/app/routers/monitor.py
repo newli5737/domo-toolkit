@@ -293,12 +293,6 @@ def crawl_datasets_only(
                     # Get detail to retrieve streamId + accurate provider_type
                     detail = service.fetch_dataset_detail(ds_id)
 
-                    # DEBUG: in raw detail cho 3 dataset đầu
-                    if done_count[0] < 3 and detail:
-                        print(f"[DEBUG-RAW-DETAIL] id={ds_id}, name={ds.get('name','')[:40]}")
-                        print(f"  search_api: state='{ds.get('state','')}', status='{ds.get('status','')}'")
-                        print(f"  detail_api: state='{detail.get('state','')}', status='{detail.get('status','')}'")
-
                     if detail:
                         if detail.get("card_count") is not None:
                             ds["card_count"] = detail["card_count"]
@@ -315,25 +309,21 @@ def crawl_datasets_only(
                             ds["stream_id"] = str(stream_id)
                             # Fetch schedule via stream — lấy EXECUTION state (SUCCESS/ERROR)
                             schedule = service.fetch_dataset_schedule(stream_id)
-
-                            # DEBUG: in raw schedule cho 3 dataset đầu
-                            if done_count[0] < 3 and schedule:
-                                last_exec = schedule.get("last_execution")
-                                last_succ = schedule.get("last_successful_execution")
-                                print(f"  schedule_api: schedule_state='{schedule.get('schedule_state','')}'")
-                                print(f"    last_execution={last_exec}")
-                                print(f"    last_successful_execution={last_succ}")
-                                print(f"    dataset_status='{schedule.get('dataset_status','')}'")
-                                print(f"    current_execution_state='{schedule.get('current_execution_state','')}'")
-
                             if schedule:
                                 last_exec = schedule.get("last_execution")
                                 if last_exec:
                                     ds["last_execution_state"] = last_exec.get("state", "")
                                 ds["schedule_state"] = schedule.get("schedule_state", ds.get("schedule_state", ""))
+
+                    # DEBUG: in 1 dòng cho MỌI dataset
+                    search_st = f"{ds.get('state','')}/{ds.get('status','')}"
+                    detail_st = f"{detail.get('state','')}/{detail.get('status','')}" if detail else "N/A"
+                    exec_st = ds.get("last_execution_state", "")
+                    ds_status = ds.get("dataset_status", "")
+                    print(f"[DS] {ds.get('name','')[:45]:45s} | search={search_st:20s} | detail={detail_st:20s} | ds_status={ds_status:10s} | exec={exec_st}")
+
                 except Exception as e:
-                    if done_count[0] < 3:
-                        print(f"[CRAWL] Dataset {ds_id} error: {e}")
+                    print(f"[CRAWL] Dataset {ds_id} error: {e}")
                 finally:
                     done_count[0] += 1
                     if done_count[0] % 20 == 0 or done_count[0] == total_ds:
