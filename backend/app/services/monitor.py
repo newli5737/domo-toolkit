@@ -433,11 +433,13 @@ class MonitorService:
                     pass
             last_exec_state = latest.get("state", "UNKNOWN")
 
-        # Fallback: nếu execution state không có hoặc không phải FAILED,
-        # nhưng search API status chứa FAILED (vd: FAILED_DATA_FLOW) → dùng status
-        if status and "FAILED" in status.upper():
-            if not last_exec_state or "FAILED" not in (last_exec_state or "").upper():
-                last_exec_state = status  # vd: "FAILED_DATA_FLOW"
+        # DEBUG: log khi search API status khác execution state
+        if status or last_exec_state:
+            has_failed = ("FAILED" in (status or "").upper()) or ("FAILED" in (last_exec_state or "").upper())
+            if has_failed:
+                log.info(f"  [DEBUG-DF] id={df_id}, name={df_name[:40]}, "
+                         f"search_status='{status}', exec_state='{last_exec_state}', "
+                         f"exec_count={len(executions)}")
 
         return {
             "id": df_id,
