@@ -124,10 +124,11 @@ def _post_crawl_alert(db: DomoDatabase):
         "SELECT id, name, provider_type, last_execution_state, card_count "
         "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
     )
-    # Query failed dataflows
+    # Query failed dataflows — check cả last_execution_state và status
     failed_df = db.query(
-        "SELECT id, name, last_execution_state "
-        "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
+        "SELECT id, name, last_execution_state, status "
+        "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%' "
+        "OR UPPER(COALESCE(status, '')) LIKE 'FAILED%'"
     )
 
     all_failed_ds = [dict(r) for r in (failed_ds or [])]
@@ -671,10 +672,11 @@ def trigger_auto_check(req: AutoCheckRequest):
             )
             all_failed_ds = [dict(r) for r in (failed_ds or [])]
 
-        # Dataflows bị FAILED
+        # Dataflows bị FAILED — check cả last_execution_state và status
         failed_df = db.query(
-            "SELECT id, name, last_execution_state "
-            "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
+            "SELECT id, name, last_execution_state, status "
+            "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%' "
+            "OR UPPER(COALESCE(status, '')) LIKE 'FAILED%%'"
         )
         all_failed_df = [dict(r) for r in (failed_df or [])]
 
@@ -807,8 +809,9 @@ def get_alerts():
                 "FROM datasets WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
             )
             failed_df = db.query(
-                "SELECT id, name, last_execution_state "
-                "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%'"
+                "SELECT id, name, last_execution_state, status "
+                "FROM dataflows WHERE UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%' "
+                "OR UPPER(COALESCE(status, '')) LIKE 'FAILED%'"
             )
             all_failed_ds = [dict(r) for r in (failed_ds or [])]
             all_failed_df = [dict(r) for r in (failed_df or [])]

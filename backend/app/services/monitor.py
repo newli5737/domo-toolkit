@@ -381,7 +381,13 @@ class MonitorService:
 
             log.progress(len(all_dataflows), total_expected, "Crawl Dataflows")
 
-            if len(dataflows) < self.PAGE_SIZE:
+            # Tiếp tục crawl cho đến khi đạt total_expected hoặc hết data
+            if len(dataflows) < self.PAGE_SIZE and (
+                total_expected is None or len(all_dataflows) >= total_expected
+            ):
+                break
+
+            if total_expected and len(all_dataflows) >= total_expected:
                 break
 
             offset += self.PAGE_SIZE
@@ -426,6 +432,12 @@ class MonitorService:
                 except Exception:
                     pass
             last_exec_state = latest.get("state", "UNKNOWN")
+
+        # Fallback: nếu execution state không có hoặc không phải FAILED,
+        # nhưng search API status chứa FAILED (vd: FAILED_DATA_FLOW) → dùng status
+        if status and "FAILED" in status.upper():
+            if not last_exec_state or "FAILED" not in (last_exec_state or "").upper():
+                last_exec_state = status  # vd: "FAILED_DATA_FLOW"
 
         return {
             "id": df_id,
@@ -672,9 +684,16 @@ class MonitorService:
 
         for df in dataflow_details:
             last_state = df.get("last_execution_state", "")
+            df_status = df.get("status", "")
             last_time = df.get("last_execution_time")
 
-            if last_state == "FAILED":
+            # Check failed: execution state hoặc dataflow status chứa FAILED
+            is_failed = (
+                (last_state and "FAILED" in last_state.upper()) or
+                (df_status and "FAILED" in df_status.upper())
+            )
+
+            if is_failed:
                 df_failed += 1
                 df_alerts.append({
                     "type": "dataflow",
@@ -682,7 +701,7 @@ class MonitorService:
                     "id": df["id"],
                     "name": df.get("name", ""),
                     "database_type": df.get("database_type", ""),
-                    "last_execution_state": last_state,
+                    "last_execution_state": last_state or df_status,
                     "last_execution_time": (
                         last_time.astimezone(JST).strftime("%Y-%m-%d %H:%M JST")
                         if last_time else None

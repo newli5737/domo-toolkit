@@ -211,8 +211,11 @@ export default function Monitor() {
   }
 
   const getStatusBadge = (status: string) => {
+    const upper = (status || '').toUpperCase()
+    // Pattern match: FAILED, FAILED_DATA_FLOW, ERROR, etc.
+    if (upper.includes('FAILED') || upper === 'ERROR')
+      return <span className="badge badge-failed"><AlertTriangle className="w-3 h-3" /> {status}</span>
     switch (status) {
-      case 'failed': case 'FAILED': case 'ERROR': return <span className="badge badge-failed"><AlertTriangle className="w-3 h-3" /> {t('common.failed')}</span>
       case 'stale': return <span className="badge badge-stale"><Clock className="w-3 h-3" /> {t('common.stale')}</span>
       case 'no_update': return <span className="badge badge-gray"><Clock className="w-3 h-3" /> {t('common.noUpdate')}</span>
       case 'SUCCESS': return <span className="badge badge-success"><CheckCircle className="w-3 h-3" /> {t('common.ok')}</span>
@@ -545,7 +548,7 @@ export default function Monitor() {
                     })
                     .sort((a, b) => {
                       // Status priority: FAILED/ERROR first
-                      const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
+                      const statusPri = (s: string) => s.toUpperCase().includes('FAILED') || ['ERROR'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
                       const aPri = statusPri(a.last_execution_state || '')
                       const bPri = statusPri(b.last_execution_state || '')
                       if (aPri !== bPri) return aPri - bPri
