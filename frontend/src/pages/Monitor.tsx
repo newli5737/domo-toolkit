@@ -634,8 +634,11 @@ export default function Monitor() {
                 <thead><tr>
                   <th className="w-12 text-center">#</th>
                   <th>{t('common.name')}</th>
+                  <th className="cursor-pointer hover:text-purple-500 select-none" onClick={() => handleDfSort('status')}>
+                    {t('monitor.datasetStatus')}<DfSortIcon field="status" />
+                  </th>
                   <th className="cursor-pointer hover:text-purple-500 select-none" onClick={() => handleDfSort('last_execution_state')}>
-                    {t('common.status')}<DfSortIcon field="last_execution_state" />
+                    {t('monitor.lastExecState')}<DfSortIcon field="last_execution_state" />
                   </th>
                   <th className="cursor-pointer hover:text-purple-500 select-none" onClick={() => handleDfSort('last_execution_time')}>
                     {t('monitor.lastExec')}<DfSortIcon field="last_execution_time" />
@@ -644,7 +647,7 @@ export default function Monitor() {
                 </tr></thead>
                 <tbody>
                   {dataflows.length === 0 && (
-                    <tr><td colSpan={7} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
+                    <tr><td colSpan={8} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {dataflows
                     .filter(df => !dfSearch.trim() || df.name?.toLowerCase().includes(dfSearch.trim().toLowerCase()))
@@ -665,8 +668,11 @@ export default function Monitor() {
                       <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
                       <td className="font-medium max-w-[300px] truncate">{df.name}</td>
                       <td>
-                        {getStatusBadge(df.last_execution_state)}
+                        {df.status ? <span className="badge badge-gray">{df.status}</span> : <span className="text-slate-300">-</span>}
                         {df.paused && <span className="badge badge-gray ml-1">{t('monitor.paused')}</span>}
+                      </td>
+                      <td>
+                        {df.last_execution_state ? getStatusBadge(df.last_execution_state) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="text-sm">
                         <div className="text-slate-700">{fmtTime(df.last_execution_time)}</div>
