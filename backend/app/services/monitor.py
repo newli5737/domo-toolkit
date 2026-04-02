@@ -621,6 +621,7 @@ class MonitorService:
                     log.error(f"  Process dataflow lỗi: {e}")
 
         self.save_dataflows(dataflow_details)
+        self.propagate_dataflow_status_to_datasets(dataflow_details)
 
         # ─── Phase 3: Phân tích kết quả ──────────────────────
         log.info("Phase 3: Phân tích...")
