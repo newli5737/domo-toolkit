@@ -13,8 +13,9 @@ import {
   Loader,
   Download,
   Search,
+  FileDown,
 } from 'lucide-react'
-import { apiPost, apiGet } from '../api'
+import { apiPost, apiGet, apiDownload } from '../api'
 import { useI18n } from '../i18n'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 
@@ -501,6 +502,15 @@ export default function Monitor() {
                       min={0} />
                   )}
                 </div>
+                <button onClick={() => {
+                  const params = new URLSearchParams()
+                  if (dsSearch.trim()) params.set('search', dsSearch.trim())
+                  if (dsFilterType) params.set('provider_type', dsFilterType)
+                  if (dsFilterCardDir === 'gte') params.set('min_card_count', String(dsFilterCardVal))
+                  apiDownload(`/api/monitor/export/datasets/csv?${params.toString()}`)
+                }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
+                  <FileDown className="w-3.5 h-3.5" /> CSV
+                </button>
                 <button onClick={crawlDatasets} disabled={loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
                   {crawlType === 'datasets' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDatasets')}
@@ -603,6 +613,13 @@ export default function Monitor() {
                     placeholder={lang === 'vi' ? 'Tìm theo tên...' : '名前で検索...'}
                     className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 w-48" />
                 </div>
+                <button onClick={() => {
+                  const params = new URLSearchParams()
+                  if (dfSearch.trim()) params.set('search', dfSearch.trim())
+                  apiDownload(`/api/monitor/export/dataflows/csv?${params.toString()}`)
+                }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
+                  <FileDown className="w-3.5 h-3.5" /> CSV
+                </button>
                 <button onClick={crawlDataflows} disabled={loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
                   {crawlType === 'dataflows' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDataflows')}
