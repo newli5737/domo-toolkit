@@ -1,11 +1,14 @@
 """Monitor Router — API endpoints cho giám sát datasets & dataflows."""
 
+import csv
+import io
 import json
 import os
 import threading
 import requests as http_requests
 from datetime import datetime
 from fastapi import APIRouter, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
@@ -905,3 +908,131 @@ def get_auto_check_config():
         "schedule_minute": _alert_config.get("schedule_minute", 0),
         "schedule_days": _alert_config.get("schedule_days", "mon,tue,wed,thu,fri"),
     }
+
+
+# ─── CSV Export ───────────────────────────────────────────
+
+@router.get("/export/datasets/csv")
+def export_datasets_csv(
+    provider_type: str = Query(default="", description="Filter theo provider type"),
+    min_card_count: int = Query(default=0, description="Filter dataset >= N cards"),
+    search: str = Query(default="", description="Tìm theo tên"),
+):
+    """Xuất toàn bộ datasets ra file CSV."""
+    db = _get_db()
+
+    where_clauses = ["1=1"]
+    params = []
+
+    if provider_type:
+        where_clauses.append("LOWER(provider_type) = LOWER(%s)")
+        params.append(provider_type)
+    if min_card_count > 0:
+        where_clauses.append("card_count >= %s")
+        params.append(min_card_count)
+    if search.strip():
+        where_clauses.append("LOWER(name) LIKE %s")
+        params.append(f"%{search.strip().lower()}%")
+
+    where_str = " AND ".join(where_clauses)
+
+    rows = db.query(
+        f"""SELECT id, name, row_count, column_count, card_count, data_flow_count,
+                   provider_type, stream_id, schedule_state, dataset_status,
+                   last_execution_state, last_updated, updated_at
+            FROM datasets
+            WHERE {where_str}
+            ORDER BY card_count DESC NULLS LAST""",
+        params,
+    )
+    db.close()
+
+    headers = [
+        "ID", "Name", "Row Count", "Column Count", "Card Count", "Dataflow Count",
+        "Provider Type", "Stream ID", "Schedule State", "Dataset Status",
+        "Last Execution State", "Last Updated", "Crawled At",
+    ]
+    field_keys = [
+        "id", "name", "row_count", "column_count", "card_count", "data_flow_count",
+        "provider_type", "stream_id", "schedule_state", "dataset_status",
+        "last_execution_state", "last_updated", "updated_at",
+    ]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in (rows or []):
+        writer.writerow([row.get(k, "") for k in field_keys])
+
+    output.seek(0)
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"datasets_{timestamp}.csv"
+
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/export/dataflows/csv")
+def export_dataflows_csv(
+    status_filter: str = Query(default="", description="Filter theo status"),
+    search: str = Query(default="", description="Tìm theo tên"),
+):
+    """Xuất toàn bộ dataflows ra file CSV."""
+    db = _get_db()
+
+    where_clauses = ["1=1"]
+    params = []
+
+    if status_filter:
+        where_clauses.append("UPPER(last_execution_state) = UPPER(%s)")
+        params.append(status_filter)
+    if search.strip():
+        where_clauses.append("LOWER(name) LIKE %s")
+        params.append(f"%{search.strip().lower()}%")
+
+    where_str = " AND ".join(where_clauses)
+
+    rows = db.query(
+        f"""SELECT id, name, status, paused, database_type,
+                   last_execution_time, last_execution_state,
+                   execution_count, owner, output_dataset_count, updated_at
+            FROM dataflows
+            WHERE {where_str}
+            ORDER BY last_execution_time DESC NULLS LAST""",
+        params,
+    )
+    db.close()
+
+    headers = [
+        "ID", "Name", "Status", "Paused", "Database Type",
+        "Last Execution Time", "Last Execution State",
+        "Execution Count", "Owner", "Output Dataset Count", "Crawled At",
+    ]
+    field_keys = [
+        "id", "name", "status", "paused", "database_type",
+        "last_execution_time", "last_execution_state",
+        "execution_count", "owner", "output_dataset_count", "updated_at",
+    ]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in (rows or []):
+        writer.writerow([row.get(k, "") for k in field_keys])
+
+    output.seek(0)
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"dataflows_{timestamp}.csv"
+
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
