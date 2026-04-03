@@ -705,35 +705,66 @@ def trigger_auto_check(req: AutoCheckRequest):
     _log.info(f"  gmail_configured   : {bool(settings.gmail_email and settings.gmail_app_password)}")
 
     try:
-        # ─── DEBUG: Query tất cả datasets khớp filter (không kể FAILED) để xem tổng quan
+        # ─── DEBUG: Hiển thị tổng quan 2 nhóm dataset cần check ─────
+        # Cond 1: tất cả mysql-ssh datasets (bất kỳ card count)
         if req.provider_type.strip():
-            all_matching = db.query(
+            all_type_ds = db.query(
                 "SELECT id, name, card_count, last_execution_state "
-                "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) AND card_count >= %s "
+                "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) "
                 "ORDER BY card_count DESC",
-                (req.provider_type.strip(), req.min_card_count)
+                (req.provider_type.strip(),)
             )
-            all_matching = [dict(r) for r in (all_matching or [])]
-            _log.info(f"[AUTO-CHECK] Datasets khớp filter (type='{req.provider_type}', card>={req.min_card_count}): {len(all_matching)} cái")
-            for r in all_matching:
+            all_type_ds = [dict(r) for r in (all_type_ds or [])]
+            _log.info(f"[AUTO-CHECK] [COND-1] Datasets type='{req.provider_type}' (tất cả): {len(all_type_ds)} cái")
+            for r in all_type_ds[:20]:
                 state = r.get("last_execution_state") or "—"
-                icon = "❌" if "FAILED" in state.upper() else "✅"
-                _log.info(f"  {icon} [{r['id'][:8]}...] {r.get('name','')[:55]:55s} | cards={r.get('card_count',0):4d} | exec={state}")
+                icon = "FAILED" if "FAILED" in state.upper() else "OK"
+                _log.info(f"  [{icon}] [{r['id'][:8]}...] {r.get('name','')[:50]:50s} | cards={r.get('card_count',0):4d} | exec={state}")
         else:
-            _log.info(f"[AUTO-CHECK] provider_type trống → không filter theo type")
+            _log.info(f"[AUTO-CHECK] [COND-1] provider_type trống → bỏ qua check theo type")
 
-        # ── 1. Query datasets đã crawl ──
-        # Datasets: provider_type AND card_count >= N bị FAILED
-        all_failed_ds = []
+        # Cond 2: tất cả dataset có card >= N (bất kỳ type)
+        all_card_ds = db.query(
+            "SELECT id, name, provider_type, card_count, last_execution_state "
+            "FROM datasets WHERE card_count >= %s "
+            "ORDER BY card_count DESC",
+            (req.min_card_count,)
+        )
+        all_card_ds = [dict(r) for r in (all_card_ds or [])]
+        _log.info(f"[AUTO-CHECK] [COND-2] Datasets card>={req.min_card_count} (mọi type): {len(all_card_ds)} cái")
+        for r in all_card_ds[:20]:
+            state = r.get("last_execution_state") or "—"
+            icon = "FAILED" if "FAILED" in state.upper() else "OK"
+            _log.info(f"  [{icon}] [{r['id'][:8]}...] {r.get('name','')[:45]:45s} | type={r.get('provider_type','')[:15]:15s} | cards={r.get('card_count',0):4d} | exec={state}")
+
+        # ── 1. Query Condition 1: provider_type datasets bị FAILED ──────────────
+        # Tất cả dataset có đúng import type (bất kỳ card count) mà FAILED
+        failed_by_type = []
         if req.provider_type.strip():
-            failed_ds = db.query(
+            rows = db.query(
                 "SELECT id, name, provider_type, last_execution_state, card_count "
                 "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) "
-                "AND card_count >= %s "
                 "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%'",
-                (req.provider_type.strip(), req.min_card_count)
+                (req.provider_type.strip(),)
             )
-            all_failed_ds = [dict(r) for r in (failed_ds or [])]
+            failed_by_type = [dict(r) for r in (rows or [])]
+
+        # ── 2. Query Condition 2: card>=N datasets bị FAILED (mọi type) ─────────
+        failed_by_card = db.query(
+            "SELECT id, name, provider_type, last_execution_state, card_count "
+            "FROM datasets WHERE card_count >= %s "
+            "AND UPPER(COALESCE(last_execution_state, '')) LIKE 'FAILED%%'",
+            (req.min_card_count,)
+        )
+        failed_by_card = [dict(r) for r in (failed_by_card or [])]
+
+        # Merge để alert page hiện (dedup by id)
+        all_failed_ds_ids = set()
+        all_failed_ds = []
+        for ds in failed_by_type + failed_by_card:
+            if ds["id"] not in all_failed_ds_ids:
+                all_failed_ds_ids.add(ds["id"])
+                all_failed_ds.append(ds)
 
         # Dataflows bị FAILED — check cả last_execution_state và status
         failed_df = db.query(
@@ -743,20 +774,28 @@ def trigger_auto_check(req: AutoCheckRequest):
         )
         all_failed_df = [dict(r) for r in (failed_df or [])]
 
-        has_issues = len(all_failed_ds) > 0 or len(all_failed_df) > 0
-        datasets_ok = len(all_failed_ds) == 0
+        # ── Đánh giá điều kiện ───────────────────────────────────────────────────
+        cond1_ok = len(failed_by_type) == 0   # tất cả mysql-ssh không lỗi
+        cond2_ok = len(failed_by_card) == 0   # tất cả card>=40 không lỗi
+        datasets_ok = cond1_ok and cond2_ok   # cả 2 phải OK
+
+        has_issues = not datasets_ok or len(all_failed_df) > 0
         dataflows_failed = len(all_failed_df) > 0
 
-        # ─── DEBUG: In kết quả phân tích ──────────────────────────
+        # ─── DEBUG: In kết quả phân tích ─────────────────────────────
         _log.info(f"[AUTO-CHECK] ─── Kết quả phân tích ───")
-        _log.info(f"  datasets FAILED (type+card filter): {len(all_failed_ds)} cái")
-        _log.info(f"  dataflows FAILED                  : {len(all_failed_df)} cái")
-        _log.info(f"  datasets_ok  = {datasets_ok}  {'→ SẼ post Backlog (nếu cấu hình OK)' if datasets_ok else '→ KHÔNG post Backlog'}")
-        _log.info(f"  has_issues   = {has_issues}")
-        if all_failed_ds:
-            _log.info(f"[AUTO-CHECK] Datasets FAILED chi tiết:")
-            for ds in all_failed_ds:
+        _log.info(f"  [COND-1] type='{req.provider_type}' FAILED : {len(failed_by_type)} cái  → {'OK' if cond1_ok else 'FAILED'}")
+        _log.info(f"  [COND-2] card>={req.min_card_count} FAILED  : {len(failed_by_card)} cái  → {'OK' if cond2_ok else 'FAILED'}")
+        _log.info(f"  dataflows FAILED                   : {len(all_failed_df)} cái")
+        _log.info(f"  datasets_ok = {datasets_ok}  {'→ SẼ post Backlog' if datasets_ok else '→ KHÔNG post Backlog'}")
+        if failed_by_type:
+            _log.info(f"[AUTO-CHECK] [COND-1] Chi tiết FAILED type='{req.provider_type}':")
+            for ds in failed_by_type:
                 _log.info(f"  FAILED [{ds['id'][:8]}...] {ds.get('name','')[:55]:55s} | cards={ds.get('card_count',0)} | exec={ds.get('last_execution_state')}")
+        if failed_by_card:
+            _log.info(f"[AUTO-CHECK] [COND-2] Chi tiết FAILED card>={req.min_card_count}:")
+            for ds in failed_by_card:
+                _log.info(f"  FAILED [{ds['id'][:8]}...] {ds.get('name','')[:50]:50s} | type={ds.get('provider_type',''):15s} | cards={ds.get('card_count',0)} | exec={ds.get('last_execution_state')}")
         if all_failed_df:
             _log.info(f"[AUTO-CHECK] Dataflows FAILED chi tiết:")
             for df in all_failed_df[:10]:
@@ -765,7 +804,7 @@ def trigger_auto_check(req: AutoCheckRequest):
         # ── 2. ALWAYS update alert state (for /alert page) ──
         _alert_data["checked_at"] = datetime.now().isoformat()
         _alert_data["all_ok"] = not has_issues
-        _alert_data["failed_datasets"] = [dict(r) for r in all_failed_ds]
+        _alert_data["failed_datasets"] = all_failed_ds
         _alert_data["failed_dataflows"] = all_failed_df
 
         result = {
