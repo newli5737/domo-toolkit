@@ -231,7 +231,7 @@ export default function Settings() {
                       onChange={e => setScheduleMinute(Number(e.target.value))}
                       className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-400"
                     >
-                      {[0, 15, 30, 45].map(m => (
+                      {Array.from({length: 60}, (_, m) => (
                         <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
                       ))}
                     </select>
