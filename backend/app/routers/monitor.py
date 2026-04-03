@@ -692,7 +692,33 @@ def trigger_auto_check(req: AutoCheckRequest):
     settings = get_settings()
     db = _get_db()
 
+    # ─── DEBUG: In cấu hình đang dùng ──────────────────────────
+    print("=" * 60)
+    print(f"[AUTO-CHECK] ▶ Bắt đầu kiểm tra điều kiện")
+    print(f"  provider_type  : '{req.provider_type}'  ← Import Type filter")
+    print(f"  min_card_count : {req.min_card_count}  ← dataset phải có card >= này")
+    print(f"  alert_email    : {req.alert_email or '(không cấu hình)'}")
+    print(f"  backlog_configured : {bool(settings.backlog_issue_id and settings.backlog_api_key)}")
+    print(f"  gmail_configured   : {bool(settings.gmail_email and settings.gmail_app_password)}")
+
     try:
+        # ─── DEBUG: Query tất cả datasets khớp filter (không kể FAILED) để xem tổng quan
+        if req.provider_type.strip():
+            all_matching = db.query(
+                "SELECT id, name, card_count, last_execution_state "
+                "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) AND card_count >= %s "
+                "ORDER BY card_count DESC",
+                (req.provider_type.strip(), req.min_card_count)
+            )
+            all_matching = [dict(r) for r in (all_matching or [])]
+            print(f"[AUTO-CHECK] Datasets khớp filter (type='{req.provider_type}', card>={req.min_card_count}): {len(all_matching)} cái")
+            for r in all_matching:
+                state = r.get("last_execution_state") or "—"
+                icon = "❌" if "FAILED" in state.upper() else "✅"
+                print(f"  {icon} [{r['id'][:8]}...] {r.get('name','')[:55]:55s} | cards={r.get('card_count',0):4d} | exec={state}")
+        else:
+            print(f"[AUTO-CHECK] provider_type trống → không filter theo type")
+
         # ── 1. Query datasets đã crawl ──
         # Datasets: provider_type AND card_count >= N bị FAILED
         all_failed_ds = []
@@ -718,15 +744,26 @@ def trigger_auto_check(req: AutoCheckRequest):
         datasets_ok = len(all_failed_ds) == 0
         dataflows_failed = len(all_failed_df) > 0
 
+        # ─── DEBUG: In kết quả phân tích ──────────────────────────
+        print(f"[AUTO-CHECK] ─── Kết quả phân tích ───")
+        print(f"  datasets FAILED (type+card filter): {len(all_failed_ds)} cái")
+        print(f"  dataflows FAILED                  : {len(all_failed_df)} cái")
+        print(f"  datasets_ok  = {datasets_ok}  {'✅ → SẼ post Backlog (nếu cấu hình OK)' if datasets_ok else '❌ → KHÔNG post Backlog'}")
+        print(f"  has_issues   = {has_issues}")
+        if all_failed_ds:
+            print(f"[AUTO-CHECK] ⚠️  Datasets FAILED chi tiết:")
+            for ds in all_failed_ds:
+                print(f"    ❌ [{ds['id'][:8]}...] {ds.get('name','')[:55]:55s} | cards={ds.get('card_count',0)} | exec={ds.get('last_execution_state')}")
+        if all_failed_df:
+            print(f"[AUTO-CHECK] ⚠️  Dataflows FAILED chi tiết:")
+            for df in all_failed_df[:10]:
+                print(f"    ❌ [{df['id']}] {df.get('name','')[:55]:55s} | exec={df.get('last_execution_state')} | status={df.get('status')}")
+
         # ── 2. ALWAYS update alert state (for /alert page) ──
         _alert_data["checked_at"] = datetime.now().isoformat()
         _alert_data["all_ok"] = not has_issues
         _alert_data["failed_datasets"] = [dict(r) for r in all_failed_ds]
         _alert_data["failed_dataflows"] = all_failed_df
-        print(f"[AUTO-CHECK] _alert_data updated: checked_at={_alert_data['checked_at']}, "
-              f"all_ok={_alert_data['all_ok']}, "
-              f"ds_fail={len(_alert_data['failed_datasets'])}, "
-              f"df_fail={len(_alert_data['failed_dataflows'])}")
 
         result = {
             "checked_at": _alert_data["checked_at"],
@@ -739,6 +776,7 @@ def trigger_auto_check(req: AutoCheckRequest):
 
         # ── 3a. Datasets OK (import_type đúng + card_count >= N) → Post Backlog ──
         if datasets_ok and settings.backlog_issue_id and settings.backlog_api_key:
+            print(f"[AUTO-CHECK] ✅ datasets_ok=True → Gọi Backlog API...")
             try:
                 api_key = settings.backlog_api_key
                 issue_id = settings.backlog_issue_id
@@ -768,9 +806,14 @@ def trigger_auto_check(req: AutoCheckRequest):
 
             except Exception as e:
                 print(f"[AUTO-CHECK] Backlog error: {e}")
+        elif not datasets_ok:
+            print(f"[AUTO-CHECK] ❌ datasets_ok=False → BỎ QUA Backlog")
+        elif not settings.backlog_issue_id or not settings.backlog_api_key:
+            print(f"[AUTO-CHECK] ⚠️  Backlog chưa cấu hình (issue_id hoặc api_key trống) → BỎ QUA")
 
         # ── 3b. Dataflows FAILED → Send email alert (independent of dataset status) ──
         if dataflows_failed and settings.gmail_email and settings.gmail_app_password and req.alert_email:
+            print(f"[AUTO-CHECK] 📧 Gửi email cảnh báo dataflow failed...")
             subject = "【Domo監視】DataFlowエラー検出"
             body_lines = ["DomoデータフローでFAILEDが検出されました。\n"]
 
@@ -797,6 +840,7 @@ def trigger_auto_check(req: AutoCheckRequest):
 
         # ── 3c. Datasets FAILED → Also send email ──
         if len(all_failed_ds) > 0 and settings.gmail_email and settings.gmail_app_password and req.alert_email:
+            print(f"[AUTO-CHECK] 📧 Gửi email cảnh báo dataset failed...")
             subject = "【Domo監視】DataSetエラー検出"
             body_lines = ["DomoデータセットでFAILEDが検出されました。\n"]
 
@@ -818,6 +862,8 @@ def trigger_auto_check(req: AutoCheckRequest):
                 app_password=settings.gmail_app_password,
             )
 
+        print(f"[AUTO-CHECK] ◀ Xong. backlog_posted={result['backlog_posted']}, email_sent={result['email_sent']}")
+        print("=" * 60)
         db.close()
         return result
 
