@@ -732,7 +732,7 @@ def trigger_auto_check(req: AutoCheckRequest):
         )
         all_card_ds = [dict(r) for r in (all_card_ds or [])]
         _log.info(f"[AUTO-CHECK] [COND-2] Datasets card>={req.min_card_count} (mọi type): {len(all_card_ds)} cái")
-        for r in all_card_ds[:20]:
+        for r in all_card_ds:
             state = r.get("last_execution_state") or "—"
             icon = "FAILED" if "FAILED" in state.upper() else "OK"
             _log.info(f"  [{icon}] [{r['id'][:8]}...] {r.get('name','')[:45]:45s} | type={r.get('provider_type','')[:15]:15s} | cards={r.get('card_count',0):4d} | exec={state}")
