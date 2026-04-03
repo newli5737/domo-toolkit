@@ -737,7 +737,7 @@ def trigger_auto_check(req: AutoCheckRequest):
             "email_sent": False,
         }
 
-        # ── 3a. Datasets OK → Post comment to Backlog via REST API ──
+        # ── 3a. Datasets OK (import_type đúng + card_count >= N) → Post Backlog ──
         if datasets_ok and settings.backlog_issue_id and settings.backlog_api_key:
             try:
                 api_key = settings.backlog_api_key
