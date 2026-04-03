@@ -117,7 +117,15 @@ class MonitorService:
 
             log.progress(len(all_datasets), total_expected, "Crawl Datasets")
 
-            if len(datasets) < self.PAGE_SIZE:
+            if not datasets:
+                break
+
+            if total_expected and len(all_datasets) >= total_expected:
+                break
+
+            if len(datasets) < self.PAGE_SIZE and (
+                total_expected is None or len(all_datasets) >= total_expected
+            ):
                 break
 
             offset += self.PAGE_SIZE
