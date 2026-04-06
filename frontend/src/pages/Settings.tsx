@@ -34,9 +34,7 @@ export default function Settings() {
   const [minCards, setMinCards] = useState(40)
   const [providerType, setProviderType] = useState('mysql-ssh')
   const [alertEmail, setAlertEmail] = useState('')
-  const [commentOk, setCommentOk] = useState(
-    '【1次データ取得エラー確認結果】\nエラーがなかった旨\n\n【メインDataSetエラー確認結果】\nエラーがなかった旨'
-  )
+
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [saving, setSaving] = useState(false)
@@ -92,7 +90,6 @@ export default function Settings() {
       const res = await apiPost<any>('/api/monitor/auto-check', {
         min_card_count: minCards,
         provider_type: providerType,
-        comment_ok: commentOk,
         alert_email: alertEmail,
       })
       setResult(res)
@@ -284,15 +281,7 @@ export default function Settings() {
               {saved && <span className="text-xs text-green-600">✓ {lang === 'vi' ? 'Đã lưu!' : '保存しました！'}</span>}
             </div>
 
-            {/* Comment template */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                {lang === 'vi' ? 'Comment khi OK (gửi Backlog)' : 'OK時のコメント（Backlog投稿）'}
-              </label>
-              <textarea value={commentOk} onChange={e => setCommentOk(e.target.value)}
-                rows={5}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 resize-none font-mono" />
-            </div>
+            {/* Comment template temporarily removed */}
 
             {/* Info */}
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">

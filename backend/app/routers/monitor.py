@@ -170,14 +170,16 @@ def _post_crawl_alert(db: DomoDatabase):
 
             body = "\n".join(body_lines)
 
-            sent = send_alert_email(
-                subject=subject,
-                body=body,
-                to_email=to_email,
-                from_email=settings.gmail_email,
-                app_password=settings.gmail_app_password,
-            )
-            print(f"[AUTO-ALERT] Email sent={sent} to={to_email}, "
+            # Tạm thời tắt gửi email
+            # sent = send_alert_email(
+            #     subject=subject,
+            #     body=body,
+            #     to_email=to_email,
+            #     from_email=settings.gmail_email,
+            #     app_password=settings.gmail_app_password,
+            # )
+            sent = False
+            print(f"[AUTO-ALERT] (TẠM TẮT EMAIL) Email sent={sent} to={to_email}, "
                   f"ds_fail={len(all_failed_ds)}, df_fail={len(all_failed_df)}")
         else:
             print(f"[AUTO-ALERT] Has failures but email not configured "
@@ -819,15 +821,15 @@ def trigger_auto_check(req: AutoCheckRequest):
             "email_sent": False,
         }
 
-        # ── 3a. Datasets OK (import_type đúng + card_count >= N) → Post Backlog ──
-        if datasets_ok and settings.backlog_issue_id and settings.backlog_api_key:
-            _log.info(f"[AUTO-CHECK] datasets_ok=True → Gọi Backlog API...")
+        # ── 3a. Post Backlog (BẤT KỂ OK HAY FAILED) ──
+        if settings.backlog_issue_id and settings.backlog_api_key:
+            _log.info(f"[AUTO-CHECK] Gọi Backlog API...")
             try:
                 api_key = settings.backlog_api_key
                 issue_id = settings.backlog_issue_id
                 base_url = settings.backlog_base_url
 
-                # Update status → In Progress (statusId=2)
+                # Update status → In Progress (statusId=2) tuỳ chọn
                 patch_resp = http_requests.patch(
                     f"{base_url}/api/v2/issues/{issue_id}?apiKey={api_key}",
                     json={"statusId": 2},
@@ -836,29 +838,48 @@ def trigger_auto_check(req: AutoCheckRequest):
                 )
                 _log.info(f"[AUTO-CHECK] Backlog PATCH status → {patch_resp.status_code}")
 
-                # Add comment
-                if req.comment_ok:
-                    comment_resp = http_requests.post(
-                        f"{base_url}/api/v2/issues/{issue_id}/comments?apiKey={api_key}",
-                        json={"content": req.comment_ok},
-                        headers={"Content-Type": "application/json"},
-                        timeout=30,
-                    )
-                    _log.info(f"[AUTO-CHECK] Backlog POST comment → {comment_resp.status_code}")
-                    result["backlog_posted"] = comment_resp.status_code < 400
-                else:
-                    result["backlog_posted"] = patch_resp.status_code < 400
+                # Build comment content based on failures
+                domo_base = f"https://{settings.domo_instance}"
+
+                def format_ds_list(ds_list):
+                    if not ds_list:
+                        return "エラーがなかった\n"
+                    res = ""
+                    for ds in ds_list:
+                        res += f"{ds.get('name', '')}\nURL: {domo_base}/datasources/{ds.get('id', '')}/details/overview\n"
+                    return res
+
+                def format_df_list(df_list):
+                    if not df_list:
+                        return "エラーがなかった\n"
+                    res = "エラー有\n"
+                    for df in df_list:
+                        res += f"{df.get('name', '')}\nURL: {domo_base}/datacenter/dataflows/{df.get('id', '')}/details\n"
+                    return res
+
+                comment_content = (
+                    f"【1次データ取得エラー確認結果】\n{format_ds_list(failed_by_type)}\n"
+                    f"【メインDataSetエラー確認結果】\n{format_ds_list(failed_by_card)}\n"
+                    f"【DataFlow】\n{format_df_list(all_failed_df)}"
+                ).strip()
+
+                comment_resp = http_requests.post(
+                    f"{base_url}/api/v2/issues/{issue_id}/comments?apiKey={api_key}",
+                    json={"content": comment_content},
+                    headers={"Content-Type": "application/json"},
+                    timeout=30,
+                )
+                _log.info(f"[AUTO-CHECK] Backlog POST comment → {comment_resp.status_code}")
+                result["backlog_posted"] = comment_resp.status_code < 400
 
             except Exception as e:
                 _log.error(f"[AUTO-CHECK] Backlog error: {e}")
-        elif not datasets_ok:
-            _log.info(f"[AUTO-CHECK] datasets_ok=False → BỎ QUA Backlog")
-        elif not settings.backlog_issue_id or not settings.backlog_api_key:
-            _log.info(f"[AUTO-CHECK] Backlog chua cau hinh (issue_id hoac api_key trong) → BO QUA")
+        else:
+            _log.info(f"[AUTO-CHECK] Backlog chưa cấu hình (issue_id hoặc api_key trống) → BỎ QUA")
 
-        # ── 3b. Dataflows FAILED → Send email alert (independent of dataset status) ──
+        # ── 3b. Xử lý Email (ĐANG TẠM TẮT) ──
         if dataflows_failed and settings.gmail_email and settings.gmail_app_password and req.alert_email:
-            _log.info(f"[AUTO-CHECK] Gui email canh bao dataflow failed...")
+            _log.info(f"[AUTO-CHECK] (TẠM TẮT EMAIL) Gui email canh bao dataflow failed...")
             domo_base = f"https://{settings.domo_instance}"
             subject = "【Domo監視】DataFlowエラー検出"
             body_lines = ["DomoデータフローでFAILEDが検出されました。\n"]
@@ -876,18 +897,18 @@ def trigger_auto_check(req: AutoCheckRequest):
 
             body = "\n".join(body_lines)
 
-            result["email_sent"] = send_alert_email(
-                subject=subject,
-                body=body,
-                to_email=req.alert_email,
-                from_email=settings.gmail_email,
-                app_password=settings.gmail_app_password,
-            )
-            _log.info(f"[AUTO-CHECK] Email sent={result['email_sent']} to={req.alert_email}")
+            # Tạm tắt gửi email
+            # result["email_sent"] = send_alert_email(
+            #     subject=subject,
+            #     body=body,
+            #     to_email=req.alert_email,
+            #     from_email=settings.gmail_email,
+            #     app_password=settings.gmail_app_password,
+            # )
+            _log.info(f"[AUTO-CHECK] (TẠM TẮT EMAIL) Email would be sent to={req.alert_email}")
 
-        # ── 3c. Datasets FAILED → Also send email ──
         if len(all_failed_ds) > 0 and settings.gmail_email and settings.gmail_app_password and req.alert_email:
-            _log.info(f"[AUTO-CHECK] Gui email canh bao dataset failed...")
+            _log.info(f"[AUTO-CHECK] (TẠM TẮT EMAIL) Gui email canh bao dataset failed...")
             subject = "【Domo監視】DataSetエラー検出"
             body_lines = ["DomoデータセットでFAILEDが検出されました。\n"]
 
@@ -899,13 +920,14 @@ def trigger_auto_check(req: AutoCheckRequest):
 
             body = "\n".join(body_lines)
 
-            send_alert_email(
-                subject=subject,
-                body=body,
-                to_email=req.alert_email,
-                from_email=settings.gmail_email,
-                app_password=settings.gmail_app_password,
-            )
+            # Tạm tắt
+            # send_alert_email(
+            #     subject=subject,
+            #     body=body,
+            #     to_email=req.alert_email,
+            #     from_email=settings.gmail_email,
+            #     app_password=settings.gmail_app_password,
+            # )
 
         _log.info(f"[AUTO-CHECK] Xong. backlog_posted={result['backlog_posted']}, email_sent={result['email_sent']}")
         _log.info("=" * 60)
