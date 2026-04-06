@@ -152,23 +152,22 @@ def _post_crawl_alert(db: DomoDatabase):
         # Gửi email alert — lấy email từ FE config, không phải .env
         to_email = _alert_config.get("alert_email", "")
         if settings.gmail_email and settings.gmail_app_password and to_email:
+            domo_base = f"https://{settings.domo_instance}"
             subject = "【Domo監視】データエラー検出"
             body_lines = ["Domoデータ監視でエラーが検出されました。\n"]
 
             if all_failed_ds:
                 body_lines.append(f"■ エラーDataSet ({len(all_failed_ds)}件):")
                 for ds in all_failed_ds:
-                    body_lines.append(
-                        f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, "
-                        f"Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})"
-                    )
+                    ds_url = f"{domo_base}/datasources/{ds.get('id', '')}/details/overview"
+                    body_lines.append(f"  - {ds.get('name', '?')}\n    {ds_url}")
 
             if all_failed_df:
                 body_lines.append(f"\n■ エラーDataFlow ({len(all_failed_df)}件):")
                 for df in all_failed_df:
-                    body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')})")
+                    df_url = f"{domo_base}/datacenter/dataflows/{df.get('id', '')}/details#datasets"
+                    body_lines.append(f"  - {df.get('name', '?')}\n    {df_url}")
 
-            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
             body = "\n".join(body_lines)
 
             sent = send_alert_email(
@@ -860,19 +859,21 @@ def trigger_auto_check(req: AutoCheckRequest):
         # ── 3b. Dataflows FAILED → Send email alert (independent of dataset status) ──
         if dataflows_failed and settings.gmail_email and settings.gmail_app_password and req.alert_email:
             _log.info(f"[AUTO-CHECK] Gui email canh bao dataflow failed...")
+            domo_base = f"https://{settings.domo_instance}"
             subject = "【Domo監視】DataFlowエラー検出"
             body_lines = ["DomoデータフローでFAILEDが検出されました。\n"]
 
             body_lines.append(f"■ エラーDataFlow ({len(all_failed_df)}件):")
             for df in all_failed_df:
-                body_lines.append(f"  - {df.get('name', '?')} (ID: {df.get('id', '?')}, Status: {df.get('last_execution_state', '?')})")
+                df_url = f"{domo_base}/datacenter/dataflows/{df.get('id', '')}/details#datasets"
+                body_lines.append(f"  - {df.get('name', '?')}\n    {df_url}")
 
             if all_failed_ds:
                 body_lines.append(f"\n■ エラーDataSet ({len(all_failed_ds)}件):")
                 for ds in all_failed_ds:
-                    body_lines.append(f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, Cards: {ds.get('card_count', 0)})")
+                    ds_url = f"{domo_base}/datasources/{ds.get('id', '')}/details/overview"
+                    body_lines.append(f"  - {ds.get('name', '?')}\n    {ds_url}")
 
-            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
             body = "\n".join(body_lines)
 
             result["email_sent"] = send_alert_email(
@@ -890,14 +891,12 @@ def trigger_auto_check(req: AutoCheckRequest):
             subject = "【Domo監視】DataSetエラー検出"
             body_lines = ["DomoデータセットでFAILEDが検出されました。\n"]
 
+            domo_base = f"https://{settings.domo_instance}"
             body_lines.append(f"■ エラーDataSet ({len(all_failed_ds)}件):")
             for ds in all_failed_ds:
-                body_lines.append(
-                    f"  - {ds.get('name', '?')} (ID: {ds.get('id', '?')}, "
-                    f"Type: {ds.get('provider_type', '?')}, Cards: {ds.get('card_count', 0)})"
-                )
+                ds_url = f"{domo_base}/datasources/{ds.get('id', '')}/details/overview"
+                body_lines.append(f"  - {ds.get('name', '?')}\n    {ds_url}")
 
-            body_lines.append(f"\n確認時刻: {_alert_data['checked_at']}")
             body = "\n".join(body_lines)
 
             send_alert_email(
