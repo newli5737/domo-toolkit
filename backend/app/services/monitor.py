@@ -704,7 +704,9 @@ class MonitorService:
             last_time = df.get("last_execution_time")
 
             # Check failed: execution state hoặc dataflow status chứa FAILED
-            is_failed = (
+            # Loại trừ dataflow DISABLED (đã tắt thì không cần cảnh báo)
+            is_disabled = df_status.upper() == "DISABLED" if df_status else False
+            is_failed = not is_disabled and (
                 (last_state and "FAILED" in last_state.upper()) or
                 (df_status and "FAILED" in df_status.upper())
             )
