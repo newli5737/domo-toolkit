@@ -191,15 +191,17 @@ class BeastModeService:
                     api_time = time.time() - batch_start
 
                     db_start = time.time()
-                    if update_rows or dep_rows:
-                        from sqlalchemy import update
+                    if update_rows:
+                        from app.core.database import bulk_upsert
                         from app.models.beastmode import BeastMode, BMDependencyMap
-                        for r in update_rows:
-                            self.db.execute(update(BeastMode).where(BeastMode.id == r["id"]).values(expression=r["expression"], legacy_id=r["legacy_id"], column_positions=r["column_positions"]))
+                        bulk_upsert(self.db, BeastMode, update_rows, ["id"])
                         update_rows.clear()
-                        for r in dep_rows:
-                            self.db.merge(BMDependencyMap(**r))
+                    if dep_rows:
+                        from app.core.database import bulk_upsert
+                        from app.models.beastmode import BMDependencyMap
+                        bulk_upsert(self.db, BMDependencyMap, dep_rows, ["bm_id", "depends_on_bm_id"])
                         dep_rows.clear()
+                    if update_rows or dep_rows:
                         self.db.commit()
                     db_time = time.time() - db_start
 

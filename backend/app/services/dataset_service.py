@@ -193,8 +193,8 @@ class DatasetCrawlService:
 
         if rows:
             from app.models.dataset import Dataset
-            for r in rows:
-                self.db.merge(Dataset(**r))
+            from app.core.database import bulk_upsert
+            bulk_upsert(self.db, Dataset, rows, ["id"])
             self.db.commit()
             from collections import Counter
             pt_counts = Counter(r.get("provider_type", "") for r in rows)

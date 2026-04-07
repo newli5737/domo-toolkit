@@ -23,3 +23,25 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def bulk_upsert(session, model, rows: list[dict], index_elements: list[str]):
+    """Thực thi UPSERT an toàn cho nhiều dialect để ngăn chặn UniqueViolation."""
+    if not rows:
+        return
+    dialect = session.bind.dialect.name
+    if dialect == 'postgresql':
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect == 'sqlite':
+        from sqlalchemy.dialects.sqlite import insert
+    else:
+        for r in rows:
+            session.merge(model(**r))
+        return
+
+    for r in rows:
+        stmt = insert(model).values(**r)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=index_elements,
+            set_={k: v for k, v in r.items() if k not in index_elements}
+        )
+        session.execute(stmt)

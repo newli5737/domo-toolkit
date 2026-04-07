@@ -188,9 +188,9 @@ class CardService:
 
         if rows:
             from app.models.card import Card
+            from app.core.database import bulk_upsert
             db_start = time.time()
-            for r in rows:
-                self.db.merge(Card(**r))
+            bulk_upsert(self.db, Card, rows, ["id"])
             self.db.commit()
             db_time = time.time() - db_start
             log.info(f"Lưu {len(rows)} cards vào DB ({db_time:.1f}s)")

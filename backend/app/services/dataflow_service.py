@@ -189,9 +189,11 @@ class DataflowCrawlService:
         """Lưu dataflows vào DB (bỏ output_dataset_ids trước khi insert)."""
         if dataflows:
             from app.models.dataset import Dataflow
+            from app.core.database import bulk_upsert
+            rows = []
             for df in dataflows:
-                row = {k: v for k, v in df.items() if k != "output_dataset_ids"}
-                self.db.merge(Dataflow(**row))
+                rows.append({k: v for k, v in df.items() if k != "output_dataset_ids"})
+            bulk_upsert(self.db, Dataflow, rows, ["id"])
             self.db.commit()
             log.info(f"Lưu {len(dataflows)} dataflows vào DB")
 
