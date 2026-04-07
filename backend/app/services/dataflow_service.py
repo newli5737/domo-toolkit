@@ -188,15 +188,17 @@ class DataflowCrawlService:
     def save_dataflows(self, dataflows: list[dict]):
         """Lưu dataflows vào DB (bỏ output_dataset_ids trước khi insert)."""
         if dataflows:
-            rows = []
+            from app.models.dataset import Dataflow
             for df in dataflows:
                 row = {k: v for k, v in df.items() if k != "output_dataset_ids"}
-                rows.append(row)
-            self.db.bulk_upsert("dataflows", rows, "id")
-            log.info(f"Lưu {len(rows)} dataflows vào DB")
+                self.db.merge(Dataflow(**row))
+            self.db.commit()
+            log.info(f"Lưu {len(dataflows)} dataflows vào DB")
 
     def propagate_dataflow_status_to_datasets(self, dataflows: list[dict]):
         """Cập nhật last_execution_state cho các output datasets."""
+        from sqlalchemy import update
+        from app.models.dataset import Dataset
         updated = 0
         for df in dataflows:
             state = df.get("last_execution_state", "")
@@ -207,10 +209,12 @@ class DataflowCrawlService:
                 if ds_id:
                     try:
                         self.db.execute(
-                            "UPDATE datasets SET last_execution_state = %s WHERE id = %s",
-                            (state, str(ds_id)),
+                            update(Dataset)
+                            .where(Dataset.id == str(ds_id))
+                            .values(last_execution_state=state)
                         )
                         updated += 1
                     except Exception:
                         pass
+        self.db.commit()
         log.info(f"Propagated execution state to {updated} output datasets")

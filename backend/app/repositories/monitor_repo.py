@@ -28,14 +28,17 @@ class MonitorRepository:
 
     def load_alert_config(self) -> dict:
         try:
-            rows = self.db.execute(text("SELECT key, value FROM app_settings WHERE key LIKE 'alert_%' OR key LIKE 'schedule_%'")).mappings().all()
+            from app.models.monitor import AppSetting
+            rows = self.db.query(AppSetting).filter(
+                (AppSetting.key.like('alert_%')) | (AppSetting.key.like('schedule_%'))
+            ).all()
             config = {
                 "alert_email": "", "min_card_count": 40, "provider_type": "mysql-ssh",
                 "schedule_enabled": False, "schedule_hour": 8, "schedule_minute": 0,
                 "schedule_days": "mon,tue,wed,thu,fri"
             }
             for row in rows:
-                k, v = row["key"], row["value"]
+                k, v = row.key, row.value
                 if k == "alert_email": config["alert_email"] = v
                 elif k == "alert_min_card_count": config["min_card_count"] = int(v)
                 elif k == "alert_provider_type": config["provider_type"] = v
@@ -63,12 +66,9 @@ class MonitorRepository:
             "schedule_days": str(config.get("schedule_days", "mon,tue,wed,thu,fri")),
         }
         try:
+            from app.models.monitor import AppSetting
             for k, v in mappings.items():
-                self.db.execute(
-                    text("""INSERT INTO app_settings (key, value, updated_at) VALUES (:k, :v, NOW())
-                       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"""),
-                    {"k": k, "v": v}
-                )
+                self.db.merge(AppSetting(key=k, value=v))
             self.db.commit()
         except Exception as e:
             self.db.rollback()

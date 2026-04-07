@@ -55,10 +55,12 @@ class CardService:
             all_cards.extend(cards)
 
             if job_id:
+                from sqlalchemy import update
+                from app.models.monitor import CrawlJob
                 self.db.execute(
-                    "UPDATE crawl_jobs SET processed = %s, total = %s WHERE id = %s",
-                    (len(all_cards), total_expected, job_id)
+                    update(CrawlJob).where(CrawlJob.id == job_id).values(processed=len(all_cards), total=total_expected)
                 )
+                self.db.commit()
             if progress_callback:
                 progress_callback(len(all_cards), total_expected or 0)
 
@@ -72,26 +74,12 @@ class CardService:
         log.info(f"Crawl cards xong: {len(all_cards)} cards")
         return all_cards
 
-    CARD_PARTS = "parts=viewInfo&parts=datasources"
-
-    def ensure_datasource_columns(self):
-        """Thêm cột datasource_id và datasource_name nếu chưa có."""
-        try:
-            self.db.execute("""
-                ALTER TABLE cards
-                    ADD COLUMN IF NOT EXISTS datasource_id VARCHAR(100),
-                    ADD COLUMN IF NOT EXISTS datasource_name TEXT
-            """)
-            log.info("[✓] cards table: datasource_id, datasource_name columns ready")
-        except Exception as e:
-            log.warn(f"Alter table cards failed: {e}")
-
     def fetch_view_counts(self, card_urns: list[str], batch_size: int = 50,
                           job_id: int = None, progress_callback=None):
         """Lấy view count + datasource info cho list card URNs, lưu vào DB."""
-        # Đảm bảo DB có cột mới
-        self.ensure_datasource_columns()
-
+        from sqlalchemy import update
+        from app.models.card import Card
+        
         total = len(card_urns)
         processed = 0
         updated = 0
@@ -140,13 +128,22 @@ class CardService:
                             ))
 
                     if params_list:
-                        sql = """UPDATE cards SET
-                                 view_count = %s,
-                                 last_viewed_at = CASE WHEN %s > 0 THEN to_timestamp(%s / 1000.0) ELSE NULL END,
-                                 datasource_id = %s,
-                                 datasource_name = %s
-                                 WHERE id = %s"""
-                        self.db.execute_batch(sql, params_list)
+                        from datetime import datetime
+                        for p in params_list:
+                            view_count, lv1, lv2, ds_id, ds_name, card_id_str = p
+                            ts = datetime.fromtimestamp(lv1 / 1000.0) if lv1 > 0 else None
+                            
+                            self.db.execute(
+                                update(Card)
+                                .where(Card.id == card_id_str)
+                                .values(
+                                    view_count=view_count,
+                                    last_viewed_at=ts,
+                                    datasource_id=ds_id,
+                                    datasource_name=ds_name
+                                )
+                            )
+                        self.db.commit()
                         updated += len(params_list)
 
             except Exception as e:
@@ -155,10 +152,12 @@ class CardService:
 
             processed += len(batch)
             if job_id:
+                from sqlalchemy import update
+                from app.models.monitor import CrawlJob
                 self.db.execute(
-                    "UPDATE crawl_jobs SET processed = %s WHERE id = %s",
-                    (processed, job_id)
+                    update(CrawlJob).where(CrawlJob.id == job_id).values(processed=processed)
                 )
+                self.db.commit()
             if progress_callback:
                 progress_callback(processed, total)
 
@@ -188,13 +187,18 @@ class CardService:
             })
 
         if rows:
+            from app.models.card import Card
             db_start = time.time()
-            self.db.bulk_upsert("cards", rows, "id")
+            for r in rows:
+                self.db.merge(Card(**r))
+            self.db.commit()
             db_time = time.time() - db_start
             log.info(f"Lưu {len(rows)} cards vào DB ({db_time:.1f}s)")
 
     def get_all_urns(self) -> list[str]:
         """Lấy tất cả card URNs từ DB."""
-        result = self.db.query("SELECT id FROM cards")
-        log.info(f"Tổng card URNs: {len(result)}")
-        return [str(r["id"]) for r in result]
+        from app.models.card import Card
+        result = self.db.query(Card.id).all()
+        urns = [str(r[0]) for r in result]
+        log.info(f"Tổng card URNs: {len(urns)}")
+        return urns

@@ -96,11 +96,13 @@ class BeastModeService:
                 })
 
             db_start = time.time()
-            if rows_bm:
-                self.db.bulk_upsert("beastmodes", rows_bm, "id")
-            if rows_card_map:
-                for row in rows_card_map:
-                    self.db.upsert("bm_card_map", row, "bm_id, card_id")
+            if rows_bm or rows_card_map:
+                from app.models.beastmode import BeastMode, BMCardMap
+                for r in rows_bm:
+                    self.db.merge(BeastMode(**r))
+                for r in rows_card_map:
+                    self.db.merge(BMCardMap(**r))
+                self.db.commit()
             db_time = time.time() - db_start
 
             all_bms.extend(results)
@@ -111,10 +113,10 @@ class BeastModeService:
 
             # Cập nhật progress
             if job_id:
-                self.db.execute(
-                    "UPDATE crawl_jobs SET processed = %s, total = %s WHERE id = %s",
-                    (len(all_bms), total_hits, job_id)
-                )
+                from app.models.monitor import CrawlJob
+                from sqlalchemy import update
+                self.db.execute(update(CrawlJob).where(CrawlJob.id == job_id).values(processed=len(all_bms), total=total_hits))
+                self.db.commit()
             if progress_callback:
                 progress_callback(len(all_bms), total_hits)
 
@@ -189,31 +191,25 @@ class BeastModeService:
                     api_time = time.time() - batch_start
 
                     db_start = time.time()
-                    if update_rows:
-                        for row in update_rows:
-                            self.db.execute(
-                                """UPDATE beastmodes
-                                   SET expression = %s, legacy_id = %s, column_positions = %s
-                                   WHERE id = %s""",
-                                (row["expression"], row["legacy_id"], row["column_positions"], row["id"])
-                            )
+                    if update_rows or dep_rows:
+                        from sqlalchemy import update
+                        from app.models.beastmode import BeastMode, BMDependencyMap
+                        for r in update_rows:
+                            self.db.execute(update(BeastMode).where(BeastMode.id == r["id"]).values(expression=r["expression"], legacy_id=r["legacy_id"], column_positions=r["column_positions"]))
                         update_rows.clear()
-
-                    if dep_rows:
-                        for row in dep_rows:
-                            self.db.execute(
-                                """INSERT INTO bm_dependency_map (bm_id, depends_on_bm_id)
-                                   VALUES (%s, %s) ON CONFLICT DO NOTHING""",
-                                (row["bm_id"], row["depends_on_bm_id"])
-                            )
+                        for r in dep_rows:
+                            chk = self.db.query(BMDependencyMap).filter_by(bm_id=r["bm_id"], depends_on_bm_id=r["depends_on_bm_id"]).first()
+                            if not chk:
+                                self.db.add(BMDependencyMap(**r))
                         dep_rows.clear()
+                        self.db.commit()
                     db_time = time.time() - db_start
 
                     if job_id:
-                        self.db.execute(
-                            "UPDATE crawl_jobs SET processed = %s WHERE id = %s",
-                            (all_processed, job_id)
-                        )
+                        from app.models.monitor import CrawlJob
+                        from sqlalchemy import update
+                        self.db.execute(update(CrawlJob).where(CrawlJob.id == job_id).values(processed=all_processed))
+                        self.db.commit()
                     if progress_callback:
                         progress_callback(all_processed, total)
 
@@ -288,25 +284,31 @@ class BeastModeService:
         log.info("Bắt đầu phân tích...")
 
         # Lấy tất cả BM
-        all_bms = self.db.query("SELECT id, name, expression, datasources, legacy_id, owner_id FROM beastmodes")
+        from app.models.beastmode import BeastMode, BMCardMap, BMDependencyMap, BMAnalysis, BMDeleteLog
+        from app.models.card import Card
+        bms = self.db.query(BeastMode.id, BeastMode.name, BeastMode.expression, BeastMode.datasources, BeastMode.legacy_id, BeastMode.owner_id).all()
+        all_bms = [{"id": r[0], "name": r[1], "expression": r[2], "datasources": r[3], "legacy_id": r[4], "owner_id": r[5]} for r in bms]
         log.info(f"  Tổng BM trong DB: {len(all_bms)}")
 
         # Map: bm_id → list card_ids (active)
-        card_maps = self.db.query("SELECT bm_id, card_id FROM bm_card_map WHERE is_active = TRUE")
+        card_maps_res = self.db.query(BMCardMap.bm_id, BMCardMap.card_id).filter(BMCardMap.is_active == True).all()
+        card_maps = [{"bm_id": r[0], "card_id": r[1]} for r in card_maps_res]
         bm_cards = {}
         for row in card_maps:
             bm_cards.setdefault(row["bm_id"], []).append(row["card_id"])
         log.info(f"  Card mappings: {len(card_maps)} rows, {len(bm_cards)} unique BMs")
 
         # Map: bm_id → list of BM IDs tham chiếu tới nó
-        dep_maps = self.db.query("SELECT bm_id, depends_on_bm_id FROM bm_dependency_map")
+        dep_maps_res = self.db.query(BMDependencyMap.bm_id, BMDependencyMap.depends_on_bm_id).all()
+        dep_maps = [{"bm_id": r[0], "depends_on_bm_id": r[1]} for r in dep_maps_res]
         referenced_by = {}
         for row in dep_maps:
             referenced_by.setdefault(row["depends_on_bm_id"], []).append(row["bm_id"])
         log.info(f"  Dependencies: {len(dep_maps)} rows, {len(referenced_by)} referenced BMs")
 
         # Map: card_id → view_count
-        cards = self.db.query("SELECT id, view_count FROM cards")
+        cards_res = self.db.query(Card.id, Card.view_count).all()
+        cards = [{"id": r[0], "view_count": r[1]} for r in cards_res]
         card_views = {row["id"]: row["view_count"] or 0 for row in cards}
         log.info(f"  Cards with views: {len(cards)}")
 
@@ -384,8 +386,11 @@ class BeastModeService:
 
         # Lưu DB
         if results:
-            self.db.execute("TRUNCATE TABLE bm_analysis")
-            self.db.bulk_upsert("bm_analysis", results, "bm_id")
+            from sqlalchemy import delete
+            self.db.execute(delete(BMAnalysis))
+            for r in results:
+                self.db.add(BMAnalysis(**r))
+            self.db.commit()
 
         # Thống kê duplicate (3 tầng)
         dup_exact = self._find_duplicates("duplicate_hash")
@@ -417,15 +422,23 @@ class BeastModeService:
 
     def get_group_data(self, group_number: int, limit: int = 100, offset: int = 0) -> list[dict]:
         """Lấy danh sách BM theo nhóm."""
-        return self.db.query(
-            """SELECT a.*, b.name as bm_name
-               FROM bm_analysis a
-               JOIN beastmodes b ON a.bm_id = b.id
-               WHERE a.group_number = %s
-               ORDER BY a.total_views DESC
-               LIMIT %s OFFSET %s""",
-            (group_number, limit, offset)
+        from sqlalchemy import select
+        from app.models.beastmode import BMAnalysis, BeastMode
+        stmt = (
+            select(BMAnalysis, BeastMode.name.label("bm_name"))
+            .join(BeastMode, BMAnalysis.bm_id == BeastMode.id)
+            .where(BMAnalysis.group_number == group_number)
+            .order_by(BMAnalysis.total_views.desc())
+            .limit(limit)
+            .offset(offset)
         )
+        res = self.db.execute(stmt).all()
+        out = []
+        for row in res:
+            bm = {col.name: getattr(row.BMAnalysis, col.name) for col in row.BMAnalysis.__table__.columns}
+            bm["bm_name"] = row.bm_name
+            out.append(bm)
+        return out
 
     def search_bm(self, query: str, limit: int = 50) -> list[dict]:
         """Tìm BM theo tên (ILIKE) hoặc raw ID."""
@@ -433,35 +446,48 @@ class BeastModeService:
         if not query:
             return []
 
+        from sqlalchemy import select
+        from app.models.beastmode import BMAnalysis, BeastMode
+        
         # Nếu query là số → tìm theo ID
         if query.isdigit():
-            return self.db.query(
-                """SELECT a.*, b.name as bm_name
-                   FROM bm_analysis a
-                   JOIN beastmodes b ON a.bm_id = b.id
-                   WHERE a.bm_id = %s
-                   LIMIT %s""",
-                (int(query), limit)
+            stmt = (
+                select(BMAnalysis, BeastMode.name.label("bm_name"))
+                .join(BeastMode, BMAnalysis.bm_id == BeastMode.id)
+                .where(BMAnalysis.bm_id == int(query))
+                .limit(limit)
             )
-
-        # Tìm theo tên (ILIKE)
-        return self.db.query(
-            """SELECT a.*, b.name as bm_name
-               FROM bm_analysis a
-               JOIN beastmodes b ON a.bm_id = b.id
-               WHERE b.name ILIKE %s
-               ORDER BY a.total_views DESC
-               LIMIT %s""",
-            (f"%{query}%", limit)
-        )
+        else:
+            # Tìm theo tên (ILIKE)
+            stmt = (
+                select(BMAnalysis, BeastMode.name.label("bm_name"))
+                .join(BeastMode, BMAnalysis.bm_id == BeastMode.id)
+                .where(BeastMode.name.ilike(f"%{query}%"))
+                .order_by(BMAnalysis.total_views.desc())
+                .limit(limit)
+            )
+            
+        res = self.db.execute(stmt).all()
+        out = []
+        for row in res:
+            bm = {col.name: getattr(row.BMAnalysis, col.name) for col in row.BMAnalysis.__table__.columns}
+            bm["bm_name"] = row.bm_name
+            out.append(bm)
+        return out
 
     def get_summary(self) -> dict:
         """Lấy tổng hợp kết quả phân tích."""
-        groups = self.db.query(
-            """SELECT group_number, group_label, COUNT(*) as count
-               FROM bm_analysis GROUP BY group_number, group_label ORDER BY group_number"""
+        from app.models.beastmode import BMAnalysis
+        from sqlalchemy import select, func
+        stmt = (
+            select(BMAnalysis.group_number, BMAnalysis.group_label, func.count().label("count"))
+            .group_by(BMAnalysis.group_number, BMAnalysis.group_label)
+            .order_by(BMAnalysis.group_number)
         )
-        total = self.db.count("bm_analysis")
+        groups_res = self.db.execute(stmt).all()
+        groups = [{"group_number": g[0], "group_label": g[1], "count": g[2]} for g in groups_res]
+        
+        total = self.db.query(BMAnalysis).count()
 
         dup_exact = self._find_duplicates("duplicate_hash")
         dup_normalized = self._find_duplicates("normalized_hash")
@@ -536,15 +562,15 @@ class BeastModeService:
 
         # ─── Lưu state cũ vào DB ─────────────────────────────
         card_def_json = json.dumps(card_def, ensure_ascii=False)
-        self.db.execute(
-            """INSERT INTO bm_delete_log (bm_id, bm_name, bm_legacy_id, card_id, card_definition_json, status)
-               VALUES (%s, %s, %s, %s, %s, 'pending')""",
-            (bm_id, bm_name, bm_legacy_id, card_id, card_def_json)
+        from app.models.beastmode import BMDeleteLog
+        new_log = BMDeleteLog(
+            bm_id=bm_id, bm_name=bm_name, bm_legacy_id=bm_legacy_id,
+            card_id=card_id, card_definition_json=card_def_json, status='pending'
         )
-        log_row = self.db.query_one(
-            "SELECT id FROM bm_delete_log ORDER BY id DESC LIMIT 1"
-        )
-        log_id = log_row["id"] if log_row else None
+        self.db.add(new_log)
+        self.db.commit()
+        self.db.refresh(new_log)
+        log_id = new_log.id
         log.info(f"  💾 Đã lưu card definition cũ (log #{log_id})")
 
         # ─── Debug: dump card_def ra file ────────────────────
@@ -622,10 +648,9 @@ class BeastModeService:
 
         if not data_source_id:
             if log_id:
-                self.db.execute(
-                    "UPDATE bm_delete_log SET status = 'failed', error_message = %s WHERE id = %s",
-                    ("Không tìm thấy dataSourceId", log_id)
-                )
+                from sqlalchemy import update
+                self.db.execute(update(BMDeleteLog).where(BMDeleteLog.id == log_id).values(status='failed', error_message="Không tìm thấy dataSourceId"))
+                self.db.commit()
             return {"success": False, "error": f"Không tìm thấy dataSourceId cho card #{card_id}"}
 
         log.info(f"  📦 dataSourceId={data_source_id}")
@@ -638,10 +663,9 @@ class BeastModeService:
 
         if removed_count == 0:
             if log_id:
-                self.db.execute(
-                    "UPDATE bm_delete_log SET status = 'skipped', error_message = %s WHERE id = %s",
-                    (f"BM không có trong formulas card #{card_id}", log_id)
-                )
+                from sqlalchemy import update
+                self.db.execute(update(BMDeleteLog).where(BMDeleteLog.id == log_id).values(status='skipped', error_message=f"BM không có trong formulas card #{card_id}"))
+                self.db.commit()
             return {"success": False, "error": f"Không tìm thấy BM (legacy={bm_legacy_id}) trong formulas card #{card_id}"}
 
         log.info(f"  Đã lọc {removed_count} formula, còn {len(filtered_formulas)}/{original_count}")
@@ -736,18 +760,16 @@ class BeastModeService:
             error_msg = f"PUT thất bại (status={status}): {body}"
             log.error(f"  ❌ {error_msg}")
             if log_id:
-                self.db.execute(
-                    "UPDATE bm_delete_log SET status = 'failed', error_message = %s WHERE id = %s",
-                    (error_msg[:500], log_id)
-                )
+                from sqlalchemy import update
+                self.db.execute(update(BMDeleteLog).where(BMDeleteLog.id == log_id).values(status='failed', error_message=error_msg[:500]))
+                self.db.commit()
             return {"success": False, "error": error_msg}
 
         # ─── Thành công ───────────────────────────────────────
         if log_id:
-            self.db.execute(
-                "UPDATE bm_delete_log SET status = 'success' WHERE id = %s",
-                (log_id,)
-            )
+            from sqlalchemy import update
+            self.db.execute(update(BMDeleteLog).where(BMDeleteLog.id == log_id).values(status='success'))
+            self.db.commit()
         log.success(f"  ✅ Đã gỡ BM khỏi card #{card_id}")
         return {"success": True, "removed": removed_count, "card_id": card_id}
 
@@ -775,9 +797,12 @@ class BeastModeService:
         if resp and resp.status_code in (200, 204):
             # Xóa khỏi DB cục bộ để sync
             try:
-                self.db.execute("DELETE FROM beastmodes WHERE id = %s", (bm_id,))
-                self.db.execute("DELETE FROM bm_analysis WHERE bm_id = %s", (bm_id,))
-                self.db.execute("DELETE FROM bm_card_map WHERE bm_id = %s", (bm_id,))
+                from sqlalchemy import delete
+                from app.models.beastmode import BeastMode, BMAnalysis, BMCardMap
+                self.db.execute(delete(BeastMode).where(BeastMode.id == bm_id))
+                self.db.execute(delete(BMAnalysis).where(BMAnalysis.bm_id == bm_id))
+                self.db.execute(delete(BMCardMap).where(BMCardMap.bm_id == bm_id))
+                self.db.commit()
             except Exception as e:
                 log.warn(f"Lỗi xóa DB local: {e}")
             log.success(f"=== Đã xóa thành công BM #{bm_id} ===")
