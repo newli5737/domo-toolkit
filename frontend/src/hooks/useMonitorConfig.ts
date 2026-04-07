@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { monitorService } from '../services/monitor.service'
-import type { SaveConfigPayload, AutoCheckPayload, AutoCheckResult } from '../services/monitor.service'
+import type { SaveConfigPayload, AutoCheckPayload, JobStatusResponse } from '../services/monitor.service'
 import { useI18n } from '../i18n'
 
 export function useMonitorConfig() {
@@ -23,7 +23,7 @@ export function useMonitorConfig() {
     setForm(prev => ({ ...prev, ...updates }))
   }
   
-  const [runResult, setRunResult] = useState<Partial<AutoCheckResult> & { error?: string } | null>(null)
+  const [runResult, setRunResult] = useState<Partial<JobStatusResponse> & { error?: string } | null>(null)
 
   // Fetch Config
   const { data: config, isLoading: isConfigLoading, error: configError } = useQuery({

@@ -63,6 +63,12 @@ export interface HealthCheckResult {
 
 // ─── Crawl Status ────────────────────────────────────────
 
+export interface JobStatusResponse {
+  status: string
+  message: string
+  started_at?: string
+}
+
 export interface CrawlProgress {
   step: string
   processed: number
@@ -171,7 +177,7 @@ export const monitorService = {
 
   getAutoCheckConfig: () => apiGet<AutoCheckConfig>('/api/monitor/auto-check-config'),
   saveAutoCheckConfig: (data: SaveConfigPayload) => apiPost('/api/monitor/save-alert-config', data),
-  runAutoCheck: (data: AutoCheckPayload) => apiPost<AutoCheckResult>('/api/monitor/auto-check', data),
+  runAutoCheck: (data: AutoCheckPayload) => apiPost<JobStatusResponse>('/api/monitor/auto-check', data),
 
   exportDatasetsCsv: (params: string) => apiDownload(`/api/monitor/export/datasets/csv?${params}`),
   exportDataflowsCsv: (params: string) => apiDownload(`/api/monitor/export/dataflows/csv?${params}`),

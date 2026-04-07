@@ -176,20 +176,22 @@ def get_dataflow_executions(dataflow_id: str, limit: int = Query(default=100), o
 
 # ─── Auto-Check + Alerts (dùng Repository) ────────────────
 
-@router.post("/auto-check", response_model=AutoCheckResult)
-def trigger_auto_check(req: AutoCheckRequest, db: Session = Depends(get_db)):
-    """Kiểm tra datasets DB → post Backlog nếu OK."""
+@router.post("/auto-check", response_model=JobStatusResponse)
+def trigger_auto_check(req: AutoCheckRequest, db: Session = Depends(get_db), auth=Depends(require_auth)):
+    """Kiểm tra datasets DB → post Backlog nếu OK. Thực hiện cào dữ liệu qua background thread."""
     if req.alert_email:
         _alert_config["alert_email"] = req.alert_email
     _alert_config["min_card_count"] = req.min_card_count
     _alert_config["provider_type"] = req.provider_type
 
-    repo = MonitorRepository(db)
-    result = repo.run_auto_check(req.provider_type, req.min_card_count, req.alert_email)
-    # Update in-memory alert state
-    alert_data["checked_at"] = result.checked_at
-    alert_data["all_ok"] = result.all_ok
-    return result
+    if monitor_job.get("running"):
+        return JobStatusResponse(status="already_running", message="Auto-check đang chạy ngầm...", started_at=monitor_job.get("started_at"))
+
+    from app.scheduler import _run_auto_check
+    monitor_job.update(running=True, started_at=datetime.now().isoformat(), result=None, progress=None)
+
+    threading.Thread(target=_run_auto_check, args=(req, auth), daemon=True).start()
+    return JobStatusResponse(status="started", message="Đã bắt đầu Crawl và Auto-Check (chạy ngầm)...")
 
 
 @router.get("/alerts", response_model=AlertDataResponse)

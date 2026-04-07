@@ -219,26 +219,13 @@ export default function Settings() {
             {/* Result */}
             {result && (
               <div className={`p-3 rounded-lg text-sm flex items-start gap-2 ${
-                result.error ? 'bg-red-50 text-red-700' :
-                result.all_ok ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                result.error ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
               }`}>
                 {result.error
                   ? <><AlertTriangle className="w-4 h-4 mt-0.5" /> {result.error}</>
-                  : result.all_ok
-                    ? <><CheckCircle className="w-4 h-4 mt-0.5" />
-                        <div>
-                          {lang === 'vi' ? 'Tất cả OK!' : 'すべてOK！'}
-                          {result.backlog_posted && <span className="ml-2 text-xs opacity-70">✓ Backlog posted</span>}
-                        </div>
-                      </>
-                    : <><AlertTriangle className="w-4 h-4 mt-0.5" />
-                        <div>
-                          {lang === 'vi'
-                            ? `${result.failed_dataset_count} dataset + ${result.failed_dataflow_count} dataflow lỗi`
-                            : `${result.failed_dataset_count}件のDataSet + ${result.failed_dataflow_count}件のDataFlowエラー`}
-                          {result.email_sent && <span className="ml-2 text-xs opacity-70">✓ Email sent</span>}
-                        </div>
-                      </>
+                  : <><CheckCircle className="w-4 h-4 mt-0.5" />
+                      <div>{result.message || (lang === 'vi' ? 'Đã bắt đầu chạy Auto-Check ngầm...' : 'Auto-Checkを開始しました...')}</div>
+                    </>
                 }
               </div>
             )}

@@ -21,7 +21,7 @@ DAY_MAP = {
 # ─── Job functions ────────────────────────────────────────────
 
 
-def _run_auto_check():
+def _run_auto_check(manual_req=None, auth_override=None):
     """Execute the auto-check logic: crawl dataflows → crawl datasets → check + alert.
 
     Thứ tự bắt buộc:
@@ -51,15 +51,15 @@ def _run_auto_check():
         db = SessionLocal()
         config = MonitorRepository(db).load_alert_config()
         settings = get_settings()
-        auth = get_auth()
+        auth = auth_override if auth_override else get_auth()
 
         log.info("[AUTO-CHECK] ⚙️  Cấu hình hiện tại:")
         log.info(f"  schedule_enabled : {config.get('schedule_enabled')}")
         log.info(f"  schedule_days    : {config.get('schedule_days')}")
-        log.info(f"  schedule_hour    : {config.get('schedule_hour'):02d}:{config.get('schedule_minute', 0):02d} JST")
-        log.info(f"  provider_type    : {config.get('provider_type')}  ← Import Type để filter dataset")
-        log.info(f"  min_card_count   : {config.get('min_card_count')}  ← card > N mới check")
-        log.info(f"  alert_email      : {config.get('alert_email') or '(chưa cấu hình)'}")
+        log.info(f"  schedule_hour    : {config.get('schedule_hour', 8):02d}:{config.get('schedule_minute', 0):02d} JST")
+        log.info(f"  provider_type    : {manual_req.provider_type if manual_req else config.get('provider_type')}  ← Import Type để filter dataset")
+        log.info(f"  min_card_count   : {manual_req.min_card_count if manual_req else config.get('min_card_count')}  ← card > N mới check")
+        log.info(f"  alert_email      : {manual_req.alert_email if manual_req else config.get('alert_email')} (chưa cấu hình nếu trống)")
         log.info(f"  backlog_issue_id : {settings.backlog_issue_id or '(chưa cấu hình)'}")
         log.info(f"  has_gmail        : {bool(settings.gmail_email and settings.gmail_app_password)}")
         if not auth.is_valid:
@@ -183,13 +183,16 @@ def _run_auto_check():
         log.info("-" * 50)
         log.info("[STEP 3/3] 🔍 Kiểm tra điều kiện post Backlog...")
         log.info("-" * 50)
-        log.info(f"[STEP 3] Điều kiện filter: provider_type='{config.get('provider_type')}' AND card_count >= {config.get('min_card_count')}")
+        if manual_req:
+            req = manual_req
+        else:
+            req = AutoCheckRequest(
+                alert_email=config.get("alert_email", ""),
+                min_card_count=config.get("min_card_count", 40),
+                provider_type=config.get("provider_type", "mysql-ssh"),
+            )
 
-        req = AutoCheckRequest(
-            alert_email=config.get("alert_email", ""),
-            min_card_count=config.get("min_card_count", 40),
-            provider_type=config.get("provider_type", "mysql-ssh"),
-        )
+        log.info(f"[STEP 3] Điều kiện filter: provider_type='{req.provider_type}' AND card_count >= {req.min_card_count}")
 
         # Query thủ công để log trước khi gọi trigger_auto_check
         try:
