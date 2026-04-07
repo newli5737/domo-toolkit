@@ -860,53 +860,90 @@ class BeastModeService:
 
     def _find_duplicates(self, hash_column: str = "duplicate_hash") -> list[dict]:
         """Tìm các nhóm BM có expression giống nhau theo hash column."""
-        return self.db.query(
-            f"""SELECT {hash_column} as dup_hash, COUNT(*) as cnt,
-                      ARRAY_AGG(bm_id) as bm_ids
-               FROM bm_analysis
-               WHERE {hash_column} != '' AND {hash_column} IS NOT NULL
-               GROUP BY {hash_column}
-               HAVING COUNT(*) > 1
-               ORDER BY cnt DESC
-               LIMIT 100"""
+        from sqlalchemy import select, func
+        from app.models.beastmode import BMAnalysis
+        hash_col_attr = getattr(BMAnalysis, hash_column)
+        
+        stmt = (
+            select(
+                hash_col_attr.label("dup_hash"),
+                func.count().label("cnt"),
+                func.array_agg(BMAnalysis.bm_id).label("bm_ids")
+            )
+            .where(hash_col_attr != '', hash_col_attr.isnot(None))
+            .group_by(hash_col_attr)
+            .having(func.count() > 1)
+            .order_by(func.count().desc())
+            .limit(100)
         )
+        try:
+            res = self.db.execute(stmt).all()
+            return [{"dup_hash": r[0], "cnt": r[1], "bm_ids": r[2]} for r in res]
+        except Exception:
+            # Fallback cho database không hỗ trợ array_agg (như SQLite lúc test)
+            from sqlalchemy import text
+            fallback_stmt = text(f"SELECT {hash_column} as dup_hash, COUNT(*) as cnt, GROUP_CONCAT(bm_id) as bm_ids FROM bm_analysis WHERE {hash_column} != '' AND {hash_column} IS NOT NULL GROUP BY {hash_column} HAVING COUNT(*) > 1 ORDER BY cnt DESC LIMIT 100")
+            res = self.db.execute(fallback_stmt).mappings().all()
+            return [{"dup_hash": r["dup_hash"], "cnt": r["cnt"], "bm_ids": [int(x) for x in str(r["bm_ids"]).split(',')] if r["bm_ids"] else []} for r in res]
 
     def _find_name_duplicates(self) -> list[dict]:
         """Tìm các BM có cùng tên."""
-        return self.db.query(
-            """SELECT b.name, COUNT(*) as cnt,
-                      ARRAY_AGG(a.bm_id) as bm_ids
-               FROM bm_analysis a
-               JOIN beastmodes b ON a.bm_id = b.id
-               WHERE b.name IS NOT NULL AND b.name != ''
-               GROUP BY b.name
-               HAVING COUNT(*) > 1
-               ORDER BY cnt DESC
-               LIMIT 100"""
+        from sqlalchemy import select, func
+        from app.models.beastmode import BMAnalysis, BeastMode
+        stmt = (
+            select(
+                BeastMode.name,
+                func.count().label("cnt"),
+                func.array_agg(BMAnalysis.bm_id).label("bm_ids")
+            )
+            .select_from(BMAnalysis)
+            .join(BeastMode, BMAnalysis.bm_id == BeastMode.id)
+            .where(BeastMode.name.isnot(None), BeastMode.name != '')
+            .group_by(BeastMode.name)
+            .having(func.count() > 1)
+            .order_by(func.count().desc())
+            .limit(100)
         )
+        try:
+            res = self.db.execute(stmt).all()
+            return [{"name": r[0], "cnt": r[1], "bm_ids": r[2]} for r in res]
+        except Exception:
+            from sqlalchemy import text
+            fallback_stmt = text("SELECT b.name, COUNT(*) as cnt, GROUP_CONCAT(a.bm_id) as bm_ids FROM bm_analysis a JOIN beastmodes b ON a.bm_id = b.id WHERE b.name IS NOT NULL AND b.name != '' GROUP BY b.name HAVING COUNT(*) > 1 ORDER BY cnt DESC LIMIT 100")
+            res = self.db.execute(fallback_stmt).mappings().all()
+            return [{"name": r["name"], "cnt": r["cnt"], "bm_ids": [int(x) for x in str(r["bm_ids"]).split(',')] if r["bm_ids"] else []} for r in res]
 
     def _dataset_stats(self) -> list[dict]:
         """Thống kê BM rác theo dataset."""
-        instance = self.api.auth.instance
-        raw = self.db.query(
-            """SELECT dataset_names, COUNT(*) as total,
-                      SUM(CASE WHEN group_number = 1 THEN 1 ELSE 0 END) as unused,
-                      SUM(CASE WHEN group_number IN (1,2,3) THEN 1 ELSE 0 END) as cleanup_candidates
-               FROM bm_analysis
-               WHERE dataset_names != ''
-               GROUP BY dataset_names
-               ORDER BY unused DESC
-               LIMIT 20"""
+        from sqlalchemy import select, func, case
+        from app.models.beastmode import BMAnalysis
+        instance = self.api.auth.instance if self.api.auth else ""
+        
+        stmt = (
+            select(
+                BMAnalysis.dataset_names,
+                func.count().label("total"),
+                func.sum(case((BMAnalysis.group_number == 1, 1), else_=0)).label("unused"),
+                func.sum(case((BMAnalysis.group_number.in_([1, 2, 3]), 1), else_=0)).label("cleanup_candidates")
+            )
+            .where(BMAnalysis.dataset_names != '')
+            .group_by(BMAnalysis.dataset_names)
+            .order_by(func.sum(case((BMAnalysis.group_number == 1, 1), else_=0)).desc())
+            .limit(20)
         )
+        raw = self.db.execute(stmt).all()
         results = []
         for row in raw:
-            ds_id = (row.get("dataset_names") or "").strip().split(",")[0].strip()
+            ds_id = (row[0] or "").strip().split(",")[0].strip()
+            total = int(row[1] or 0)
+            unused = int(row[2] or 0)
+            candidates = int(row[3] or 0)
             results.append({
                 "dataset_id": ds_id,
                 "url": f"https://{instance}/datasources/{ds_id}" if ds_id else "",
-                "total": row["total"],
-                "unused": row["unused"],
-                "cleanup_candidates": row["cleanup_candidates"],
+                "total": total,
+                "unused": unused,
+                "cleanup_candidates": candidates,
             })
         return results
 
@@ -915,22 +952,31 @@ class BeastModeService:
 
     def export_csv(self, group_number: int = 0, lang: str = 'vi') -> list[dict]:
         """Lấy data cho CSV export. group_number=0 → lấy tất cả."""
-        where = f"WHERE a.group_number = {group_number}" if group_number > 0 else ""
-        rows = self.db.query(
-            f"""SELECT a.bm_id, b.name as bm_name, b.legacy_id,
-                      a.group_number, a.group_label,
-                      a.owner_name,
-                      a.active_cards_count, a.total_views,
-                      a.referenced_by_count, a.dataset_names,
-                      a.card_ids,
-                      a.complexity_score,
-                      a.duplicate_hash, a.normalized_hash, a.structure_hash,
-                      a.url
-               FROM bm_analysis a
-               JOIN beastmodes b ON a.bm_id = b.id
-               {where}
-               ORDER BY a.group_number, a.total_views DESC"""
+        from sqlalchemy import select
+        from app.models.beastmode import BMAnalysis, BeastMode
+        
+        stmt = (
+            select(
+                BMAnalysis.bm_id, BeastMode.name.label("bm_name"), BeastMode.legacy_id,
+                BMAnalysis.group_number, BMAnalysis.group_label,
+                BMAnalysis.owner_name,
+                BMAnalysis.active_cards_count, BMAnalysis.total_views,
+                BMAnalysis.referenced_by_count, BMAnalysis.dataset_names,
+                BMAnalysis.card_ids,
+                BMAnalysis.complexity_score,
+                BMAnalysis.duplicate_hash, BMAnalysis.normalized_hash, BMAnalysis.structure_hash,
+                BMAnalysis.url
+            )
+            .select_from(BMAnalysis)
+            .join(BeastMode, BMAnalysis.bm_id == BeastMode.id)
         )
+        if group_number > 0:
+            stmt = stmt.where(BMAnalysis.group_number == group_number)
+            
+        stmt = stmt.order_by(BMAnalysis.group_number, BMAnalysis.total_views.desc())
+        
+        res = self.db.execute(stmt).all()
+        rows = [dict(r._mapping) for r in res]
         # Translate group_label theo lang
         label_map = self.GROUP_LABELS_JA if lang == 'ja' else self.GROUP_LABELS_VI
         instance = self.api.auth.instance if self.api.auth else ""
