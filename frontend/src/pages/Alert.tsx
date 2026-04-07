@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, ExternalLink, RefreshCw, CheckCircle, Database, Workflow } from 'lucide-react'
-import { apiGet } from '../api'
+import { authService } from '../services/auth.service'
+import { monitorService, type AlertData } from '../services/monitor.service'
 import { useI18n } from '../i18n'
 
-interface AlertData {
-  checked_at: string | null
-  all_ok: boolean
-  failed_datasets: Array<{id: string; name: string; provider_type: string; last_execution_state: string; card_count: number}>
-  failed_dataflows: Array<{id: string; name: string; last_execution_state: string}>
-}
+
 
 export default function Alert() {
   const { lang } = useI18n()
@@ -17,14 +13,14 @@ export default function Alert() {
   const [domoBase, setDomoBase] = useState('')
 
   useEffect(() => {
-    apiGet<{ domo_url?: string }>('/api/auth/status')
+    authService.getStatus()
       .then(d => { if (d.domo_url) setDomoBase(d.domo_url) })
       .catch(() => {})
   }, [])
 
   const load = () => {
     setLoading(true)
-    apiGet<AlertData>('/api/monitor/alerts')
+    monitorService.getAlerts()
       .then(d => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false))

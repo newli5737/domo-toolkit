@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { apiGet, apiPost, apiDownload, apiDelete } from '../api'
+import { beastmodeService } from '../services/beastmode.service'
 import { useI18n } from '../i18n'
 
 import type { CrawlProgress, Summary, BmRow } from '../components/BeastMode/types'
@@ -98,7 +98,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       setSummary(null)
       setCrawlProgress(null)
       connectWs(0)
-      await apiPost('/api/beastmode/crawl')
+      await beastmodeService.startCrawl()
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -111,7 +111,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       setSummary(null)
       setCrawlProgress(null)
       connectWs(0)
-      await apiPost('/api/beastmode/crawl/reanalyze', { low_view_threshold: lowViewThreshold })
+      await beastmodeService.reanalyze(lowViewThreshold)
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -120,7 +120,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
 
   const cancelCrawl = async () => {
     try {
-      await apiPost('/api/beastmode/crawl/cancel')
+      await beastmodeService.cancelCrawl()
       setCrawling(false)
     } catch (err) {
       console.error('Cancel error:', err)
@@ -133,7 +133,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       setSummary(null)
       setCrawlProgress(null)
       connectWs(0)
-      await apiPost('/api/beastmode/crawl/retry-details')
+      await beastmodeService.retryDetails()
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -146,7 +146,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
       setSummary(null)
       setCrawlProgress(null)
       connectWs(0)
-      await apiPost('/api/beastmode/crawl/bm-only')
+      await beastmodeService.bmOnlyCrawl()
     } catch (err) {
       setCrawling(false)
       alert(err instanceof Error ? err.message : 'Lỗi')
@@ -155,7 +155,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
 
   const loadSummary = async () => {
     try {
-      const data = await apiGet<Summary>('/api/beastmode/summary')
+      const data = await beastmodeService.getSummary()
       setSummary(data)
     } catch {
       // ignore
@@ -165,7 +165,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
   const loadGroupData = async (group: number) => {
     setLoadingGroup(true)
     try {
-      const data = await apiGet<{ data: BmRow[] }>(`/api/beastmode/group/${group}?limit=5000`)
+      const data = await beastmodeService.getGroup(group)
       setGroupData(data.data)
     } catch {
       setGroupData([])
@@ -187,7 +187,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
     searchTimerRef.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const data = await apiGet<{ data: BmRow[] }>(`/api/beastmode/search?q=${encodeURIComponent(value)}&limit=50`)
+        const data = await beastmodeService.search(value)
         setSearchResults(data.data)
       } catch {
         setSearchResults([])
@@ -202,7 +202,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
     setDeleting(true)
     setDeleteResult(null)
     try {
-      await apiDelete(`/api/beastmode/${deleteTarget.bm_id}`)
+      await beastmodeService.deleteBm(deleteTarget.bm_id)
       setDeleteResult({ success: true, message: `Đã xóa BM "${deleteTarget.bm_name}" thành công!` })
       // Reload
       setTimeout(() => {
@@ -243,7 +243,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
               {summary && (
                 <>
                   <button
-                    onClick={() => apiDownload(`/api/beastmode/export/csv?lang=${lang}&group=${activeTab}`)}
+                    onClick={() => beastmodeService.exportCsv(lang, activeTab)}
                     className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--color-accent-green)] to-[var(--color-accent-cyan)] text-[var(--color-bg-primary)] font-semibold text-sm transition-all hover:shadow-lg hover:shadow-[var(--color-accent-green)]/20 hover:-translate-y-0.5"
                     title={activeTab >= 1 && activeTab <= 4 ? (lang === 'ja' ? `グループ${activeTab}のみ出力` : `Chỉ xuất nhóm ${activeTab}`) : ''}
                   >

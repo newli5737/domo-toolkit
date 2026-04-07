@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { LogIn, Upload, ExternalLink, KeyRound, Loader } from 'lucide-react'
-import { apiPost, apiGet } from '../api'
+import { authService } from '../services/auth.service'
 import { useI18n } from '../i18n'
 
 interface LoginProps {
@@ -19,7 +19,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    apiGet<{ domo_url: string }>('/api/auth/status')
+    authService.getStatus()
       .then(res => setDomoUrl(res.domo_url))
       .catch(() => {})
   }, [])
@@ -27,7 +27,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleAutoLogin = async () => {
     setError(''); setSuccessMsg(''); setLoading(true)
     try {
-      const result = await apiPost<{ success: boolean; message: string; username: string }>('/api/auth/login', { username, password })
+      const result = await authService.login(username, password)
       if (result.success) { setSuccessMsg(result.message); setTimeout(() => onLoginSuccess(result.username), 1000) }
       else setError(result.message)
     } catch (err) { setError(err instanceof Error ? err.message : 'Login failed') }
@@ -41,7 +41,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     try {
       const text = await file.text()
       const cookieData = JSON.parse(text)
-      const result = await apiPost<{ success: boolean; message: string; username: string }>('/api/auth/upload-cookies', cookieData)
+      const result = await authService.uploadCookies(cookieData)
       if (result.success) { setSuccessMsg(result.message); setTimeout(() => onLoginSuccess(result.username), 1000) }
       else setError(result.message)
     } catch (err) { setError(err instanceof Error ? err.message : 'Invalid JSON') }

@@ -1,21 +1,6 @@
-import { useState, useEffect } from 'react'
 import { Settings as SettingsIcon, ExternalLink, CheckCircle, AlertTriangle, PlayCircle, Mail, Loader, Save, Clock, Calendar, ChevronDown } from 'lucide-react'
-import { apiGet, apiPost } from '../api'
 import { useI18n } from '../i18n'
-
-interface AutoCheckConfig {
-  backlog_base_url: string
-  backlog_issue_id: string
-  has_backlog_cookie: boolean
-  alert_email_to: string
-  min_card_count: number
-  provider_type: string
-  has_gmail: boolean
-  schedule_enabled: boolean
-  schedule_hour: number
-  schedule_minute: number
-  schedule_days: string
-}
+import { useMonitorConfig } from '../hooks/useMonitorConfig'
 
 const DAYS = [
   { key: 'mon', vi: 'T2', ja: '月' },
@@ -30,75 +15,18 @@ const DAYS = [
 export default function Settings() {
   const { lang } = useI18n()
 
-  const [config, setConfig] = useState<AutoCheckConfig | null>(null)
-  const [minCards, setMinCards] = useState(40)
-  const [providerType, setProviderType] = useState('mysql-ssh')
-  const [alertEmail, setAlertEmail] = useState('')
-
-  const [running, setRunning] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [scheduleEnabled, setScheduleEnabled] = useState(false)
-  const [scheduleHour, setScheduleHour] = useState(8)
-  const [scheduleMinute, setScheduleMinute] = useState(0)
-  const [scheduleDays, setScheduleDays] = useState('mon,tue,wed,thu,fri')
-  const [providerTypes, setProviderTypes] = useState<string[]>([])
-
-  useEffect(() => {
-    apiGet<AutoCheckConfig>('/api/monitor/auto-check-config')
-      .then(d => {
-        setConfig(d)
-        if (d.alert_email_to) setAlertEmail(d.alert_email_to)
-        if (d.min_card_count) setMinCards(d.min_card_count)
-        if (d.provider_type) setProviderType(d.provider_type)
-        setScheduleEnabled(d.schedule_enabled ?? false)
-        setScheduleHour(d.schedule_hour ?? 8)
-        setScheduleMinute(d.schedule_minute ?? 0)
-        setScheduleDays(d.schedule_days ?? 'mon,tue,wed,thu,fri')
-      })
-      .catch(() => {})
-    // Load provider types for select dropdown
-    apiGet<{ provider_types: string[] }>('/api/monitor/provider-types')
-      .then(d => setProviderTypes(d.provider_types || []))
-      .catch(() => {})
-  }, [])
-
-  const saveConfig = async () => {
-    setSaving(true)
-    setSaved(false)
-    try {
-      await apiPost('/api/monitor/save-alert-config', {
-        alert_email: alertEmail,
-        min_card_count: minCards,
-        provider_type: providerType,
-        schedule_enabled: scheduleEnabled,
-        schedule_hour: scheduleHour,
-        schedule_minute: scheduleMinute,
-        schedule_days: scheduleDays,
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } catch {}
-    finally { setSaving(false) }
-  }
-
-  const runAutoCheck = async () => {
-    setRunning(true)
-    setResult(null)
-    try {
-      const res = await apiPost<any>('/api/monitor/auto-check', {
-        min_card_count: minCards,
-        provider_type: providerType,
-        alert_email: alertEmail,
-      })
-      setResult(res)
-    } catch (err) {
-      setResult({ error: err instanceof Error ? err.message : 'Error' })
-    } finally {
-      setRunning(false)
-    }
-  }
+  const {
+    config,
+    form,
+    updateForm,
+    providerTypes,
+    saveConfig,
+    isSaving,
+    isSaved,
+    runAutoCheck,
+    isRunning,
+    runResult: result,
+  } = useMonitorConfig()
 
   return (
     <div>
@@ -153,7 +81,7 @@ export default function Settings() {
                   {lang === 'vi' ? 'Import Type (điều kiện lọc)' : 'Import Type（フィルター条件）'}
                 </label>
                 <div className="relative">
-                  <select value={providerType} onChange={e => setProviderType(e.target.value)}
+                  <select value={form.providerType} onChange={e => updateForm({ providerType: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 appearance-none bg-white pr-8">
                     <option value="">{lang === 'vi' ? 'Tất cả loại' : 'すべての種類'}</option>
                     {providerTypes.map(pt => (
@@ -167,14 +95,14 @@ export default function Settings() {
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
                   {lang === 'vi' ? 'Card tối thiểu (メインDataSet)' : 'メインDataSetの最小カード数'}
                 </label>
-                <input type="number" value={minCards} onChange={e => setMinCards(Number(e.target.value))}
+                <input type="number" value={form.minCards} onChange={e => updateForm({ minCards: Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" min={0} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
                   {lang === 'vi' ? 'Email nhận cảnh báo' : 'アラート送信先メール'}
                 </label>
-                <input type="text" value={alertEmail} onChange={e => setAlertEmail(e.target.value)}
+                <input type="text" value={form.alertEmail} onChange={e => updateForm({ alertEmail: e.target.value })}
                   placeholder="user1@example.com, user2@example.com"
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" />
                 <p className="text-[10px] text-slate-400 mt-1">{lang === 'vi' ? 'Nhiều email cách nhau bằng dấu phẩy' : '複数のメールはカンマで区切り'}</p>
@@ -196,26 +124,26 @@ export default function Settings() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setScheduleEnabled(!scheduleEnabled)}
+                  onClick={() => updateForm({ scheduleEnabled: !form.scheduleEnabled })}
                   className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    scheduleEnabled ? 'bg-blue-500' : 'bg-slate-300'
+                    form.scheduleEnabled ? 'bg-blue-500' : 'bg-slate-300'
                   }`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    scheduleEnabled ? 'translate-x-5' : ''
+                    form.scheduleEnabled ? 'translate-x-5' : ''
                   }`} />
                 </button>
               </div>
 
-              {scheduleEnabled && (
+              {form.scheduleEnabled && (
                 <div className="space-y-3 animate-fadein">
                   {/* Time picker */}
                   <div className="flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-slate-400" />
                     <span className="text-xs text-slate-500 w-12">{lang === 'vi' ? 'Giờ:' : '時刻:'}</span>
                     <select
-                      value={scheduleHour}
-                      onChange={e => setScheduleHour(Number(e.target.value))}
+                      value={form.scheduleHour}
+                      onChange={e => updateForm({ scheduleHour: Number(e.target.value) })}
                       className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-400"
                     >
                       {Array.from({length: 24}, (_, i) => (
@@ -224,8 +152,8 @@ export default function Settings() {
                     </select>
                     <span className="text-slate-500">:</span>
                     <select
-                      value={scheduleMinute}
-                      onChange={e => setScheduleMinute(Number(e.target.value))}
+                      value={form.scheduleMinute}
+                      onChange={e => updateForm({ scheduleMinute: Number(e.target.value) })}
                       className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-400"
                     >
                       {Array.from({length: 60}, (_, m) => (
@@ -241,14 +169,14 @@ export default function Settings() {
                     <span className="text-xs text-slate-500 w-12">{lang === 'vi' ? 'Ngày:' : '曜日:'}</span>
                     <div className="flex gap-1">
                       {DAYS.map(d => {
-                        const active = scheduleDays.split(',').map(s => s.trim()).includes(d.key)
+                        const active = form.scheduleDays.split(',').map(s => s.trim()).includes(d.key)
                         return (
                           <button
                             key={d.key}
                             onClick={() => {
-                              const current = scheduleDays.split(',').map(s => s.trim()).filter(Boolean)
+                              const current = form.scheduleDays.split(',').map(s => s.trim()).filter(Boolean)
                               const next = active ? current.filter(k => k !== d.key) : [...current, d.key]
-                              setScheduleDays(next.join(','))
+                              updateForm({ scheduleDays: next.join(',') })
                             }}
                             className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
                               active
@@ -265,8 +193,8 @@ export default function Settings() {
 
                   <p className="text-[10px] text-slate-400 pl-8">
                     {lang === 'vi'
-                      ? `Tự động chạy check Dataset + Dataflow lúc ${String(scheduleHour).padStart(2,'0')}:${String(scheduleMinute).padStart(2,'0')} JST`
-                      : `${String(scheduleHour).padStart(2,'0')}:${String(scheduleMinute).padStart(2,'0')} JSTに自動でDataSet + DataFlowをチェック`}
+                      ? `Tự động chạy check Dataset + Dataflow lúc ${String(form.scheduleHour).padStart(2,'0')}:${String(form.scheduleMinute).padStart(2,'0')} JST`
+                      : `${String(form.scheduleHour).padStart(2,'0')}:${String(form.scheduleMinute).padStart(2,'0')} JSTに自動でDataSet + DataFlowをチェック`}
                   </p>
                 </div>
               )}
@@ -274,14 +202,12 @@ export default function Settings() {
 
             {/* Save config button */}
             <div className="flex items-center gap-3">
-              <button onClick={saveConfig} disabled={saving} className="btn btn-outline" style={{padding: '6px 16px'}}>
-                {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <button onClick={saveConfig} disabled={isSaving} className="btn btn-outline" style={{padding: '6px 16px'}}>
+                {isSaving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 {lang === 'vi' ? 'Lưu cấu hình' : '設定を保存'}
               </button>
-              {saved && <span className="text-xs text-green-600">✓ {lang === 'vi' ? 'Đã lưu!' : '保存しました！'}</span>}
+              {isSaved && <span className="text-xs text-green-600">✓ {lang === 'vi' ? 'Đã lưu!' : '保存しました！'}</span>}
             </div>
-
-            {/* Comment template temporarily removed */}
 
             {/* Info */}
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
@@ -318,9 +244,9 @@ export default function Settings() {
             )}
 
             {/* Run button */}
-            <button onClick={runAutoCheck} disabled={running} className="btn btn-primary">
-              {running ? <Loader className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-              {running
+            <button onClick={runAutoCheck} disabled={isRunning} className="btn btn-primary">
+              {isRunning ? <Loader className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+              {isRunning
                 ? (lang === 'vi' ? 'Đang kiểm tra...' : 'チェック中...')
                 : (lang === 'vi' ? 'Chạy Auto-Check' : 'Auto-Checkを実行')}
             </button>

@@ -3,7 +3,7 @@
 import json
 import time
 from app.core.api import DomoAPI
-from app.core.db import DomoDatabase
+from sqlalchemy.orm import Session
 from app.core.logger import DomoLogger
 
 log = DomoLogger("card")
@@ -15,7 +15,7 @@ class CardService:
     ADMIN_SUMMARY_URL = "/api/content/v2/cards/adminsummary"
     CARD_INFO_URL = "/api/content/v1/cards"
 
-    def __init__(self, api: DomoAPI, db: DomoDatabase):
+    def __init__(self, api: DomoAPI, db: Session):
         self.api = api
         self.db = db
 

@@ -8,13 +8,10 @@ import {
   Clock,
   Activity,
 } from 'lucide-react'
-import { apiGet } from '../api'
+import { beastmodeService } from '../services/beastmode.service'
+import { monitorService } from '../services/monitor.service'
 import { useI18n } from '../i18n'
 
-interface BmSummary {
-  total: number
-  groups: { group_number: number; group_label: string; count: number }[]
-}
 
 interface Stats {
   bm_total: number
@@ -30,7 +27,7 @@ export default function Dashboard() {
   })
 
   useEffect(() => {
-    apiGet<BmSummary>('/api/beastmode/summary')
+    beastmodeService.getSummary()
       .then(d => setStats(prev => ({
         ...prev,
         bm_total: d.total || 0,
@@ -38,11 +35,11 @@ export default function Dashboard() {
       })))
       .catch(() => {})
 
-    apiGet<{ total?: number }>('/api/monitor/datasets?limit=1')
+    monitorService.getDatasets(1)
       .then(d => setStats(prev => ({ ...prev, dataset_total: d.total || 0 })))
       .catch(() => {})
 
-    apiGet<{ total?: number }>('/api/monitor/dataflows?limit=1')
+    monitorService.getDataflows(1)
       .then(d => setStats(prev => ({ ...prev, dataflow_total: d.total || 0 })))
       .catch(() => {})
   }, [])

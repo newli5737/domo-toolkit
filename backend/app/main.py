@@ -9,7 +9,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.core.db import DomoDatabase
+from app.core.database import engine, Base
+import app.models  # Load all models for metadata
+
 from app.routers import auth, beastmode, monitor, backlog, card
 
 app = FastAPI(
@@ -49,42 +51,32 @@ def startup():
     """Tạo bảng DB khi khởi động + auto-login nếu có cấu hình."""
     settings = get_settings()
     
-    # Init DB Connection Pool
-    DomoDatabase.init_pool(
-        host=settings.db_host, port=settings.db_port,
-        dbname=settings.db_name, user=settings.db_user,
-        password=settings.db_password, maxconn=20
-    )
-    db = DomoDatabase()
-    db.init_schema()
-    print(f"✅ DB schema initialized ({settings.db_name}) with pooling")
+    Base.metadata.create_all(bind=engine)
+    print(f"✅ DB schema initialized ({settings.db_name}) with SQLAlchemy")
 
-    # Hủy các crawl job cũ đang bị treo
-    from app.routers.beastmode import cleanup_stale_jobs
+    from app.services.bm_crawler import cleanup_stale_jobs
     cleanup_stale_jobs()
 
-    # Khởi động scheduler
     from app.scheduler import init_scheduler
     init_scheduler()
 
-    # Auto-login DOMO nếu có credentials trong .env
     if settings.domo_username and settings.domo_password:
-        from app.routers.auth import get_auth, _save_session
-        auth_inst = get_auth()
-        result = auth_inst.login(settings.domo_username, settings.domo_password)
-        if result["success"]:
-            _save_session(auth_inst)
-            print(f"✅ Auto-login DOMO thành công: {auth_inst.username}")
-        else:
-            print(f"⚠️ Auto-login DOMO thất bại: {result['message']}")
+        from app.repositories.auth_repo import AuthRepository
+        from app.core.database import SessionLocal
+        with SessionLocal() as db:
+            repo = AuthRepository(db)
+            result = repo.login(settings.domo_username, settings.domo_password)
+            if result.success:
+                print(f"✅ Auto-login DOMO thành công: {result.username}")
+            else:
+                print(f"⚠️ Auto-login DOMO thất bại: {result.message}")
 
 
 @app.on_event("shutdown")
 def shutdown():
     from app.scheduler import shutdown_scheduler
     shutdown_scheduler()
-    DomoDatabase.close_pool()
-    print("🛑 Đóng Database pool và Scheduler thành công.")
+    print("🛑 Đóng Scheduler thành công.")
 
 @app.get("/api/health")
 def health():

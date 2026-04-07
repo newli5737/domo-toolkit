@@ -1,52 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { apiGet } from '../api'
+import { authService } from '../services/auth.service'
+import {
+  cardService,
+  type Card,
+  type DashboardRow,
+  type CardStats,
+  type LowUsageData,
+  type LowUsageByDatasetResponse,
+} from '../services/card.service'
 import { useI18n } from '../i18n'
 import { BarChart3, Eye, Search, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle, Users, Database } from 'lucide-react'
 
-interface Card {
-  id: string
-  title: string
-  card_type: string
-  view_count: number
-  owner_name: string
-  page_id: string | null
-  page_title: string | null
-  last_viewed_at: string | null
-}
 
-interface PagedResponse<T> {
-  data: T[]
-  total: number
-  page: number
-  page_size: number
-  total_pages: number
-}
-
-interface DashboardRow {
-  page_id: string
-  page_title: string
-  card_count: number
-  total_views: number
-}
-
-interface CardStats {
-  total_cards: number
-  total_dashboards: number
-  total_views: number
-  total_types: number
-  zero_view_cards: number
-  type_distribution: { card_type: string; count: number; views: number }[]
-  top_dashboards: { page_title: string; card_count: number; total_views: number }[]
-}
-
-interface LowUsageData {
-  total: number
-  max_views_threshold: number
-  cards: Card[]
-  by_owner: { owner_name: string; card_count: number; total_views: number; zero_view_count: number }[]
-  by_dashboard: { page_title: string; page_id: string; card_count: number; total_views: number; zero_view_count: number }[]
-  by_type: { card_type: string; card_count: number; total_views: number }[]
-}
 
 export default function CardDashboard() {
   const { lang } = useI18n()
@@ -88,15 +53,15 @@ export default function CardDashboard() {
   const [luPage, setLuPage] = useState(0) // offset-based
   const luPageSize = 50
   const [luView, setLuView] = useState<'list' | 'by-owner' | 'by-dashboard' | 'by-dataset'>('list')
-  const [luDataset, setLuDataset] = useState<{ by_dashboard: any[]; datasets: any[] } | null>(null)
+  const [luDataset, setLuDataset] = useState<LowUsageByDatasetResponse | null>(null)
 
   // Init
   useEffect(() => {
-    apiGet<any>('/api/auth/status').then(d => {
-      if (d?.instance) setDomoBase(`https://${d.instance}`)
+    authService.getStatus().then(d => {
+      if ('instance' in d && d.instance) setDomoBase(`https://${d.instance}`)
     }).catch(() => { })
-    apiGet<CardStats>('/api/cards/stats').then(setStats).catch(() => { })
-    apiGet<string[]>('/api/cards/types').then(setTypes).catch(() => { })
+    cardService.getStats().then(setStats).catch(() => { })
+    cardService.getTypes().then(setTypes).catch(() => { })
   }, [])
 
   // Fetch cards
@@ -107,7 +72,7 @@ export default function CardDashboard() {
     if (cFilterType) p.set('card_type', cFilterType)
     if (cFilterDash) p.set('page_title', cFilterDash)
     if (cFilterOwner) p.set('owner', cFilterOwner)
-    apiGet<PagedResponse<Card>>(`/api/cards/list?${p}`)
+    cardService.getList(p.toString())
       .then(d => { setCards(d.data); setCTotal(d.total); setCTotalPages(d.total_pages) })
       .catch(() => { })
       .finally(() => setCLoading(false))
@@ -120,7 +85,7 @@ export default function CardDashboard() {
     setDLoading(true)
     const p = new URLSearchParams({ page: String(dPage), page_size: '50', sort_by: dSortBy, sort_order: dSortOrder })
     if (dSearch) p.set('search', dSearch)
-    apiGet<PagedResponse<DashboardRow>>(`/api/cards/dashboards?${p}`)
+    cardService.getDashboards(p.toString())
       .then(d => { setDashes(d.data); setDTotal(d.total); setDTotalPages(d.total_pages) })
       .catch(() => { })
       .finally(() => setDLoading(false))
@@ -138,8 +103,8 @@ export default function CardDashboard() {
     })
     if (luFilterType) p.set('card_type', luFilterType)
     if (luFilterOwner) p.set('owner', luFilterOwner)
-    apiGet<LowUsageData>(`/api/cards/low-usage?${p}`)
-      .then(setLuData)
+    cardService.getLowUsage(p.toString())
+      .then(d => setLuData(d))
       .catch(() => { })
       .finally(() => setLuLoading(false))
   }, [luThreshold, luPage, luFilterType, luFilterOwner])
@@ -151,7 +116,7 @@ export default function CardDashboard() {
   // Fetch low-usage by dataset
   const fetchLowUsageByDataset = useCallback(() => {
     const p = new URLSearchParams({ max_views: String(luThreshold), limit: '50' })
-    apiGet<{ by_dashboard: any[]; datasets: any[] }>(`/api/cards/low-usage-by-dataset?${p}`)
+    cardService.getLowUsageByDataset(p.toString())
       .then(setLuDataset)
       .catch(() => { })
   }, [luThreshold])
@@ -716,7 +681,7 @@ export default function CardDashboard() {
                               </tr>
                             </thead>
                             <tbody>
-                              {(luDataset.by_dashboard || []).map((d: any, i: number) => {
+                              {(luDataset.by_dashboard || []).map((d, i) => {
                                 const pct = Number(d.low_usage_pct) || 0
                                 const barColor = pct >= 80 ? 'from-red-400 to-red-500'
                                   : pct >= 50 ? 'from-amber-400 to-orange-400'

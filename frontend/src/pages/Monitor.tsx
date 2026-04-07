@@ -1,219 +1,41 @@
-import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import {
-  Activity,
-  Play,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Database,
-  GitBranch,
-  RefreshCw,
-  Filter,
-  Loader,
-  Download,
-  Search,
-  FileDown,
+  Activity, Play, AlertTriangle, CheckCircle, Clock, Database, GitBranch,
+  RefreshCw, Filter, Loader, Download, Search, FileDown,
 } from 'lucide-react'
-import { apiPost, apiGet, apiDownload } from '../api'
-import { useI18n } from '../i18n'
 import { ChevronDown, ExternalLink } from 'lucide-react'
-
-interface Alert {
-  type: string
-  status: string
-  id: string
-  name: string
-  provider_type?: string
-  database_type?: string
-  card_count?: number
-  last_updated?: string
-  last_execution_time?: string
-  last_execution_state?: string
-  hours_ago?: number
-}
-
-interface CheckResult {
-  summary: {
-    datasets: { total_crawled: number; checked: number; ok: number; stale: number }
-    dataflows: { total_crawled: number; checked: number; ok: number; failed: number; stale: number }
-    total_alerts: number
-  }
-  alerts: Alert[]
-  checked_at: string
-}
-
-interface DatasetRow {
-  id: string; name: string; row_count: number; column_count: number;
-  card_count: number; data_flow_count: number; provider_type: string;
-  stream_id: string; schedule_state: string; dataset_status: string;
-  last_execution_state: string; last_updated: string; updated_at: string;
-}
-
-interface DataflowRow {
-  id: string; name: string; status: string; paused: boolean;
-  database_type: string; last_execution_time: string; last_execution_state: string;
-  execution_count: number; owner: string; output_dataset_count: number;
-  updated_at: string;
-}
-
-type Tab = 'overview' | 'datasets' | 'dataflows'
-const VALID_TABS: Tab[] = ['overview', 'datasets', 'dataflows']
+import { monitorService } from '../services/monitor.service'
+import type { DatasetRow, DataflowRow } from '../services/monitor.service'
+import { useMonitor } from '../hooks/useMonitor'
+import { useI18n } from '../i18n'
 
 export default function Monitor() {
   const { t, lang } = useI18n()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [loading, setLoading] = useState(false)
-  const [crawling, setCrawling] = useState(false)
-  const [crawlType, setCrawlType] = useState('')
-  const [result, setResult] = useState<CheckResult | null>(null)
-  const [error, setError] = useState('')
+  const {
+    tab, setTab, domoBase,
+    crawl, filters, updateFilters, providerTypes,
+    datasets, dataflows, dsTotal, dfTotal,
+    dsSort, dfSort, handleDsSort, handleDfSort,
+    triggerCheck, crawlDs, crawlDf, refresh,
+    loadDatasets, loadDataflows,
+  } = useMonitor()
 
-  // Tab state từ URL param — giữ khi F5
-  const tab = (VALID_TABS.includes(searchParams.get('tab') as Tab)
-    ? searchParams.get('tab') as Tab
-    : 'overview')
-  const setTab = (t: Tab) => setSearchParams({ tab: t }, { replace: true })
+  // ─── Sort icons ────────────────────────────────────
 
-  // Search state
-  const [dsSearch, setDsSearch] = useState('')
-  const [dfSearch, setDfSearch] = useState('')
-  const [progress, setProgress] = useState<{ step: string; processed: number; total: number; percent: number } | null>(null)
-
-  // DOMO instance for links
-  const [domoBase, setDomoBase] = useState('')
-  useEffect(() => {
-    apiGet<{ domo_url?: string }>('/api/auth/status')
-      .then(d => { if (d.domo_url) setDomoBase(d.domo_url) })
-      .catch(() => {})
-  }, [])
-
-  // Filters
-  const [staleHours, setStaleHours] = useState(24)
-  const [minCardCount, setMinCardCount] = useState(0)
-  const [providerType, setProviderType] = useState('')
-  const [dsFilterType, setDsFilterType] = useState('')
-  const [dsFilterCardDir, setDsFilterCardDir] = useState<string>('')  // '' | 'gte' | 'lt'
-  const [dsFilterCardVal, setDsFilterCardVal] = useState<number>(40)  // Datasets tab filter
-
-  // Provider types dropdown options
-  const [providerTypes, setProviderTypes] = useState<string[]>([])
-
-  // Dataset / Dataflow lists
-  const [datasets, setDatasets] = useState<DatasetRow[]>([])
-  const [dataflows, setDataflows] = useState<DataflowRow[]>([])
-  const [dsTotal, setDsTotal] = useState(0)
-  const [dfTotal, setDfTotal] = useState(0)
-
-  // Dataset sort
-  const [dsSortBy, setDsSortBy] = useState<keyof DatasetRow>('card_count')
-  const [dsSortOrder, setDsSortOrder] = useState<'ASC' | 'DESC'>('DESC')
-
-  const handleDsSort = (field: keyof DatasetRow) => {
-    if (dsSortBy === field) setDsSortOrder(o => o === 'ASC' ? 'DESC' : 'ASC')
-    else { setDsSortBy(field); setDsSortOrder('DESC') }
-  }
   const DsSortIcon = ({ field }: { field: keyof DatasetRow }) => (
     <span className="ml-0.5 text-[10px]">
-      {dsSortBy === field ? (dsSortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
+      {dsSort.sortBy === field ? (dsSort.sortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
     </span>
   )
-
-  // Dataflow sort
-  const [dfSortBy, setDfSortBy] = useState<keyof DataflowRow>('last_execution_time')
-  const [dfSortOrder, setDfSortOrder] = useState<'ASC' | 'DESC'>('DESC')
-
-  const handleDfSort = (field: keyof DataflowRow) => {
-    if (dfSortBy === field) setDfSortOrder(o => o === 'ASC' ? 'DESC' : 'ASC')
-    else { setDfSortBy(field); setDfSortOrder('DESC') }
-  }
   const DfSortIcon = ({ field }: { field: keyof DataflowRow }) => (
     <span className="ml-0.5 text-[10px]">
-      {dfSortBy === field ? (dfSortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
+      {dfSort.sortBy === field ? (dfSort.sortOrder === 'ASC' ? '▲' : '▼') : <span className="text-slate-300">⇅</span>}
     </span>
   )
 
-  const loadDatasets = () => {
-    apiGet<{ total: number; datasets: DatasetRow[] }>('/api/monitor/datasets?limit=2000')
-      .then(d => {
-        console.log('[DEBUG] Datasets loaded:', d.datasets?.length, 'first row:', d.datasets?.[0])
-        console.log('[DEBUG] schedule_state values:', d.datasets?.slice(0, 5).map(ds => ({ name: ds.name, schedule_state: ds.schedule_state })))
-        setDatasets(d.datasets || []); setDsTotal(d.total || 0)
-      })
-      .catch(() => {})
-  }
-
-  const loadDataflows = () => {
-    apiGet<{ total: number; dataflows: DataflowRow[] }>('/api/monitor/dataflows?limit=2000')
-      .then(d => { setDataflows(d.dataflows || []); setDfTotal(d.total || 0) })
-      .catch(() => {})
-  }
-
-  const loadProviderTypes = () => {
-    apiGet<{ provider_types: string[] }>('/api/monitor/provider-types')
-      .then(d => setProviderTypes(d.provider_types || []))
-      .catch(() => {})
-  }
-
-  useEffect(() => {
-    loadDatasets()
-    loadDataflows()
-    loadProviderTypes()
-    checkStatus()
-  }, [])
-
-  const startPolling = (onLoad?: () => void) => {
-    const poll = setInterval(async () => {
-      try {
-        const status = await apiGet<{ status: string; result?: CheckResult; progress?: typeof progress }>('/api/monitor/status')
-        if (status.progress) setProgress(status.progress)
-        if (status.status === 'completed') {
-          if (status.result) setResult(status.result)
-          setLoading(false); setCrawling(false); setCrawlType(''); setProgress(null)
-          clearInterval(poll)
-          loadDatasets(); loadDataflows(); loadProviderTypes()
-          onLoad?.()
-        }
-      } catch { /* keep polling */ }
-    }, 2000)
-    setTimeout(() => { clearInterval(poll); setLoading(false); setCrawling(false); setCrawlType(''); setProgress(null) }, 300000)
-  }
-
-  const triggerCheck = async () => {
-    setLoading(true); setError(''); setCrawlType('health')
-    try {
-      await apiPost(`/api/monitor/check?stale_hours=${staleHours}&min_card_count=${minCardCount}&provider_type=${providerType}&max_workers=10`)
-      setCrawling(true); startPolling()
-    } catch (err) { setError(err instanceof Error ? err.message : 'Error'); setLoading(false); setCrawlType('') }
-  }
-
-  const crawlDatasets = async () => {
-    setLoading(true); setError(''); setCrawlType('datasets')
-    try {
-      await apiPost('/api/monitor/crawl/datasets?max_workers=10')
-      setCrawling(true); startPolling()
-    } catch (err) { setError(err instanceof Error ? err.message : 'Error'); setLoading(false); setCrawlType('') }
-  }
-
-  const crawlDataflows = async () => {
-    setLoading(true); setError(''); setCrawlType('dataflows')
-    try {
-      await apiPost('/api/monitor/crawl/dataflows?max_workers=10')
-      setCrawling(true); startPolling()
-    } catch (err) { setError(err instanceof Error ? err.message : 'Error'); setLoading(false); setCrawlType('') }
-  }
-
-  const checkStatus = async () => {
-    try {
-      const status = await apiGet<{ status: string; result?: CheckResult }>('/api/monitor/status')
-      if (status.status === 'running') { setCrawling(true); setLoading(true); startPolling() }
-      if (status.result) setResult(status.result)
-    } catch { /* ignore */ }
-  }
+  // ─── Helpers ───────────────────────────────────────
 
   const getStatusBadge = (status: string) => {
     const upper = (status || '').toUpperCase()
-    // Pattern match: FAILED, FAILED_DATA_FLOW, ERROR, etc.
     if (upper.includes('FAILED') || upper === 'ERROR')
       return <span className="badge badge-failed"><AlertTriangle className="w-3 h-3" /> {status}</span>
     switch (status) {
@@ -224,7 +46,6 @@ export default function Monitor() {
     }
   }
 
-  // Format timestamp localized to VN (UTC+7) or JP (UTC+9)
   const fmtTime = (s: string | null | number) => {
     if (!s) return '-'
     try {
@@ -233,8 +54,7 @@ export default function Monitor() {
       const tz = lang === 'ja' ? 'Asia/Tokyo' : 'Asia/Ho_Chi_Minh'
       const locale = lang === 'ja' ? 'ja-JP' : 'vi-VN'
       return d.toLocaleString(locale, {
-        timeZone: tz,
-        year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit',
       })
     } catch { return String(s) }
@@ -247,19 +67,17 @@ export default function Monitor() {
       if (isNaN(d.getTime())) return String(s)
       const tz = lang === 'ja' ? 'Asia/Tokyo' : 'Asia/Ho_Chi_Minh'
       const locale = lang === 'ja' ? 'ja-JP' : 'vi-VN'
-      return d.toLocaleString(locale, {
-        timeZone: tz,
-        month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit',
-      })
+      return d.toLocaleString(locale, { timeZone: tz, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     } catch { return String(s) }
   }
 
-  const tabs: { key: Tab; label: string }[] = [
+  const tabs: { key: typeof tab; label: string }[] = [
     { key: 'overview', label: t('monitor.tab.overview') },
     { key: 'datasets', label: `${t('monitor.tab.datasets')} (${dsTotal})` },
     { key: 'dataflows', label: `${t('monitor.tab.dataflows')} (${dfTotal})` },
   ]
+
+  const { result } = crawl
 
   return (
     <div className="animate-fadein">
@@ -274,20 +92,20 @@ export default function Monitor() {
             <p>{t('monitor.desc')}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { loadDatasets(); loadDataflows(); checkStatus() }} className="btn btn-outline">
+            <button onClick={refresh} className="btn btn-outline">
               <RefreshCw className="w-4 h-4" /> {t('common.refresh')}
             </button>
-            <button onClick={crawlDatasets} disabled={loading} className="btn btn-outline">
-              {crawlType === 'datasets' ? <Loader className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+            <button onClick={crawlDs} disabled={crawl.loading} className="btn btn-outline">
+              {crawl.crawlType === 'datasets' ? <Loader className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
               {t('monitor.crawlDatasets')}
             </button>
-            <button onClick={crawlDataflows} disabled={loading} className="btn btn-outline">
-              {crawlType === 'dataflows' ? <Loader className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
+            <button onClick={crawlDf} disabled={crawl.loading} className="btn btn-outline">
+              {crawl.crawlType === 'dataflows' ? <Loader className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
               {t('monitor.crawlDataflows')}
             </button>
-            <button onClick={triggerCheck} disabled={loading} className="btn btn-primary">
-              {crawlType === 'health' ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {loading ? t('common.running') : t('monitor.runHealthCheck')}
+            <button onClick={triggerCheck} disabled={crawl.loading} className="btn btn-primary">
+              {crawl.crawlType === 'health' ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {crawl.loading ? t('common.running') : t('monitor.runHealthCheck')}
             </button>
           </div>
         </div>
@@ -306,26 +124,26 @@ export default function Monitor() {
       </div>
 
       <div className="page-body">
-        {error && (
-          <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">{error}</div>
+        {crawl.error && (
+          <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">{crawl.error}</div>
         )}
 
-        {crawling && (
+        {crawl.crawling && (
           <div className="card mb-6">
             <div className="card-body flex flex-col items-center justify-center gap-3 py-10">
               <div className="spinner" />
               <span className="text-slate-500 text-sm">
-                {crawlType === 'datasets' ? t('monitor.crawlDatasets') : crawlType === 'dataflows' ? t('monitor.crawlDataflows') : t('monitor.crawling')}
+                {crawl.crawlType === 'datasets' ? t('monitor.crawlDatasets') : crawl.crawlType === 'dataflows' ? t('monitor.crawlDataflows') : t('monitor.crawling')}
                 ... {lang === 'vi' ? 'Đang xử lý...' : '処理中...'}
-                {progress && (
+                {crawl.progress && (
                   <div className="text-xs text-blue-400 mt-1">
-                    {progress.step} ({progress.percent}%)
+                    {crawl.progress.step} ({crawl.progress.percent}%)
                   </div>
                 )}
               </span>
-              {progress && (
+              {crawl.progress && (
                 <div className="w-full bg-blue-100 rounded-full h-2 mt-3 overflow-hidden">
-                  <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${progress.percent}%` }} />
+                  <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${crawl.progress.percent}%` }} />
                 </div>
               )}
             </div>
@@ -344,18 +162,18 @@ export default function Monitor() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">{t('monitor.staleThreshold')}</label>
-                    <input type="number" value={staleHours} onChange={e => setStaleHours(Number(e.target.value))}
+                    <input type="number" value={filters.staleHours} onChange={e => updateFilters({ staleHours: Number(e.target.value) })}
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">{t('monitor.minCardCount')}</label>
-                    <input type="number" value={minCardCount} onChange={e => setMinCardCount(Number(e.target.value))}
+                    <input type="number" value={filters.minCardCount} onChange={e => updateFilters({ minCardCount: Number(e.target.value) })}
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">{t('monitor.providerType')}</label>
                     <div className="relative">
-                      <select value={providerType} onChange={e => setProviderType(e.target.value)}
+                      <select value={filters.providerType} onChange={e => updateFilters({ providerType: e.target.value })}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 appearance-none bg-white pr-8">
                         <option value="">{lang === 'vi' ? 'Tất cả' : 'すべて'}</option>
                         {providerTypes.map(pt => (
@@ -370,7 +188,7 @@ export default function Monitor() {
             </div>
 
             {/* Summary stats */}
-            {result && !crawling && (
+            {result && !crawl.crawling && (
               <>
                 <div className="grid grid-cols-4 gap-4 mb-6">
                   <div className="stat-card">
@@ -450,7 +268,7 @@ export default function Monitor() {
               </>
             )}
 
-            {!result && !crawling && (
+            {!result && !crawl.crawling && (
               <div className="card">
                 <div className="card-body flex flex-col items-center justify-center py-16 text-slate-400">
                   <Activity className="w-10 h-10 mb-3 text-slate-300" />
@@ -467,52 +285,45 @@ export default function Monitor() {
             <div className="card-header flex items-center justify-between">
               <span className="flex items-center gap-2"><Database className="w-4 h-4 text-blue-500" /> {t('monitor.tab.datasets')} ({dsTotal})</span>
               <div className="flex items-center gap-3">
-                {/* Search by name */}
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input type="text" value={dsSearch}
-                    onChange={e => setDsSearch(e.target.value)}
+                  <input type="text" value={filters.dsSearch}
+                    onChange={e => updateFilters({ dsSearch: e.target.value })}
                     placeholder={lang === 'vi' ? 'Tìm theo tên...' : '名前で検索...'}
                     className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 w-48" />
                 </div>
-                {/* Provider type filter */}
                 <div className="relative">
-                  <select value={dsFilterType} onChange={e => setDsFilterType(e.target.value)}
+                  <select value={filters.dsFilterType} onChange={e => updateFilters({ dsFilterType: e.target.value })}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 appearance-none bg-white pr-7"
                     style={{minWidth: 140}}>
                     <option value="">{lang === 'vi' ? 'Tất cả loại' : 'すべての種類'}</option>
-                    {providerTypes.map(pt => (
-                      <option key={pt} value={pt}>{pt}</option>
-                    ))}
+                    {providerTypes.map(pt => (<option key={pt} value={pt}>{pt}</option>))}
                   </select>
                   <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 </div>
-                {/* Card count filter */}
                 <div className="flex items-center gap-1.5">
-                  <select value={dsFilterCardDir} onChange={e => setDsFilterCardDir(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 bg-white"
-                    style={{minWidth: 80}}>
+                  <select value={filters.dsFilterCardDir} onChange={e => updateFilters({ dsFilterCardDir: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 bg-white" style={{minWidth: 80}}>
                     <option value="">Cards</option>
                     <option value="gte">≥</option>
                     <option value="lt">&lt;</option>
                   </select>
-                  {dsFilterCardDir && (
-                    <input type="number" value={dsFilterCardVal} onChange={e => setDsFilterCardVal(Number(e.target.value))}
-                      className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400"
-                      min={0} />
+                  {filters.dsFilterCardDir && (
+                    <input type="number" value={filters.dsFilterCardVal} onChange={e => updateFilters({ dsFilterCardVal: Number(e.target.value) })}
+                      className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400" min={0} />
                   )}
                 </div>
                 <button onClick={() => {
                   const params = new URLSearchParams()
-                  if (dsSearch.trim()) params.set('search', dsSearch.trim())
-                  if (dsFilterType) params.set('provider_type', dsFilterType)
-                  if (dsFilterCardDir === 'gte') params.set('min_card_count', String(dsFilterCardVal))
-                  apiDownload(`/api/monitor/export/datasets/csv?${params.toString()}`)
+                  if (filters.dsSearch.trim()) params.set('search', filters.dsSearch.trim())
+                  if (filters.dsFilterType) params.set('provider_type', filters.dsFilterType)
+                  if (filters.dsFilterCardDir === 'gte') params.set('min_card_count', String(filters.dsFilterCardVal))
+                  monitorService.exportDatasetsCsv(params.toString())
                 }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
                   <FileDown className="w-3.5 h-3.5" /> CSV
                 </button>
-                <button onClick={crawlDatasets} disabled={loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
-                  {crawlType === 'datasets' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                <button onClick={crawlDs} disabled={crawl.loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
+                  {crawl.crawlType === 'datasets' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDatasets')}
                 </button>
                 <button onClick={loadDatasets} className="btn btn-outline" style={{padding:'6px 12px'}}>
@@ -552,25 +363,22 @@ export default function Monitor() {
                     <tr><td colSpan={9} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {datasets
-                    .filter(ds => !dsSearch.trim() || ds.name?.toLowerCase().includes(dsSearch.trim().toLowerCase()))
-                    .filter(ds => !dsFilterType || ds.provider_type === dsFilterType)
+                    .filter(ds => !filters.dsSearch.trim() || ds.name?.toLowerCase().includes(filters.dsSearch.trim().toLowerCase()))
+                    .filter(ds => !filters.dsFilterType || ds.provider_type === filters.dsFilterType)
                     .filter(ds => {
-                      if (!dsFilterCardDir) return true
+                      if (!filters.dsFilterCardDir) return true
                       const c = ds.card_count || 0
-                      return dsFilterCardDir === 'gte' ? c >= dsFilterCardVal : c < dsFilterCardVal
+                      return filters.dsFilterCardDir === 'gte' ? c >= filters.dsFilterCardVal : c < filters.dsFilterCardVal
                     })
                     .sort((a, b) => {
-                      // Status priority: FAILED/ERROR first
                       const statusPri = (s: string) => s.toUpperCase().includes('FAILED') || ['ERROR'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
                       const aPri = statusPri(a.last_execution_state || '')
                       const bPri = statusPri(b.last_execution_state || '')
                       if (aPri !== bPri) return aPri - bPri
-                      const av = a[dsSortBy] ?? ''
-                      const bv = b[dsSortBy] ?? ''
-                      const cmp = typeof av === 'number' && typeof bv === 'number'
-                        ? av - bv
-                        : String(av).localeCompare(String(bv))
-                      return dsSortOrder === 'ASC' ? cmp : -cmp
+                      const av = a[dsSort.sortBy] ?? ''
+                      const bv = b[dsSort.sortBy] ?? ''
+                      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+                      return dsSort.sortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map((ds, idx) => (
                     <tr key={ds.id}>
@@ -605,23 +413,22 @@ export default function Monitor() {
             <div className="card-header flex items-center justify-between">
               <span className="flex items-center gap-2"><GitBranch className="w-4 h-4 text-purple-500" /> {t('monitor.tab.dataflows')} ({dfTotal})</span>
               <div className="flex items-center gap-3">
-                {/* Search by name */}
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input type="text" value={dfSearch}
-                    onChange={e => setDfSearch(e.target.value)}
+                  <input type="text" value={filters.dfSearch}
+                    onChange={e => updateFilters({ dfSearch: e.target.value })}
                     placeholder={lang === 'vi' ? 'Tìm theo tên...' : '名前で検索...'}
                     className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 w-48" />
                 </div>
                 <button onClick={() => {
                   const params = new URLSearchParams()
-                  if (dfSearch.trim()) params.set('search', dfSearch.trim())
-                  apiDownload(`/api/monitor/export/dataflows/csv?${params.toString()}`)
+                  if (filters.dfSearch.trim()) params.set('search', filters.dfSearch.trim())
+                  monitorService.exportDataflowsCsv(params.toString())
                 }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
                   <FileDown className="w-3.5 h-3.5" /> CSV
                 </button>
-                <button onClick={crawlDataflows} disabled={loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
-                  {crawlType === 'dataflows' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                <button onClick={crawlDf} disabled={crawl.loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
+                  {crawl.crawlType === 'dataflows' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDataflows')}
                 </button>
                 <button onClick={loadDataflows} className="btn btn-outline" style={{padding:'6px 12px'}}>
@@ -650,18 +457,16 @@ export default function Monitor() {
                     <tr><td colSpan={8} className="text-center text-slate-400 py-8">{t('monitor.runHealthCheck')}</td></tr>
                   )}
                   {dataflows
-                    .filter(df => !dfSearch.trim() || df.name?.toLowerCase().includes(dfSearch.trim().toLowerCase()))
+                    .filter(df => !filters.dfSearch.trim() || df.name?.toLowerCase().includes(filters.dfSearch.trim().toLowerCase()))
                     .sort((a, b) => {
                       const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
                       const aPri = statusPri(a.last_execution_state || '')
                       const bPri = statusPri(b.last_execution_state || '')
                       if (aPri !== bPri) return aPri - bPri
-                      const av = a[dfSortBy] ?? ''
-                      const bv = b[dfSortBy] ?? ''
-                      const cmp = typeof av === 'number' && typeof bv === 'number'
-                        ? av - bv
-                        : String(av).localeCompare(String(bv))
-                      return dfSortOrder === 'ASC' ? cmp : -cmp
+                      const av = a[dfSort.sortBy] ?? ''
+                      const bv = b[dfSort.sortBy] ?? ''
+                      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+                      return dfSort.sortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map((df, idx) => (
                     <tr key={df.id}>

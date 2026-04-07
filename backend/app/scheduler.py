@@ -40,13 +40,16 @@ def _run_auto_check():
         from app.config import get_settings
         from app.core.auth import DomoAuth
         from app.core.api import DomoAPI
-        from app.core.db import DomoDatabase
+        from app.core.database import SessionLocal
+        from sqlalchemy import text
         from app.services.monitor import MonitorService
-        from app.routers.monitor import trigger_auto_check, AutoCheckRequest, _load_alert_config
-        from app.routers.auth import get_auth
+        from app.repositories.monitor_repo import MonitorRepository
+        from app.schemas.monitor import AutoCheckRequest
+        from app.repositories.auth_repo import get_auth
 
         # ── Load config & in ra để debug ────────────────────────────
-        config = _load_alert_config()
+        db = SessionLocal()
+        config = MonitorRepository(db).load_alert_config()
         settings = get_settings()
         auth = get_auth()
 
@@ -59,17 +62,11 @@ def _run_auto_check():
         log.info(f"  alert_email      : {config.get('alert_email') or '(chưa cấu hình)'}")
         log.info(f"  backlog_issue_id : {settings.backlog_issue_id or '(chưa cấu hình)'}")
         log.info(f"  has_gmail        : {bool(settings.gmail_email and settings.gmail_app_password)}")
-        log.info(f"  domo_user        : {auth.username if auth.is_valid else '(chưa login)'}")
-
         if not auth.is_valid:
             log.error("❌ [AUTO-CHECK] Bị bỏ qua: chưa login DOMO. Hãy login trước.")
+            db.close()
             return
 
-        db = DomoDatabase(
-            host=settings.db_host, port=settings.db_port,
-            dbname=settings.db_name, user=settings.db_user,
-            password=settings.db_password,
-        )
         api = DomoAPI(auth)
         service = MonitorService(api, db)
         max_workers = 10
@@ -199,12 +196,11 @@ def _run_auto_check():
             pt = req.provider_type.strip()
             mc = req.min_card_count
             if pt:
-                candidates = db.query(
+                candidates = db.execute(text(
                     "SELECT id, name, provider_type, card_count, last_execution_state "
-                    "FROM datasets WHERE LOWER(provider_type) = LOWER(%s) AND card_count >= %s "
-                    "ORDER BY card_count DESC LIMIT 20",
-                    (pt, mc)
-                )
+                    "FROM datasets WHERE LOWER(provider_type) = LOWER(:pt) AND card_count >= :mc "
+                    "ORDER BY card_count DESC LIMIT 20"
+                ), {"pt": pt, "mc": mc}).mappings().all()
                 failed_cands = [r for r in (candidates or []) if "FAILED" in (r.get("last_execution_state") or "").upper()]
                 log.info(f"[STEP 3] Datasets khớp điều kiện (type='{pt}', card>={mc}): {len(candidates or [])} cái")
                 for r in (candidates or [])[:10]:
@@ -220,19 +216,22 @@ def _run_auto_check():
         except Exception as qe:
             log.error(f"[STEP 3] Debug query lỗi: {qe}")
 
-        check_result = trigger_auto_check(req)
+        repo = MonitorRepository(db)
+        check_result = repo.run_auto_check(req.provider_type, req.min_card_count, req.alert_email)
         log.info(f"[STEP 3] Kết quả auto-check: {check_result}")
         log.info("=" * 60)
         log.info(f"✅ [AUTO-CHECK] HOÀN THÀNH")
-        log.info(f"   backlog_posted        : {check_result.get('backlog_posted')}")
-        log.info(f"   email_sent            : {check_result.get('email_sent')}")
-        log.info(f"   failed_dataset_count  : {check_result.get('failed_dataset_count')}")
-        log.info(f"   failed_dataflow_count : {check_result.get('failed_dataflow_count')}")
-        log.info("=" * 60)
-
+        log.info(f"   backlog_posted        : {check_result.backlog_posted}")
+        log.info(f"   email_sent            : {check_result.email_sent}")
+        log.info(f"   failed_dataset_count  : {check_result.failed_dataset_count}")
+        log.info(f"   failed_dataflow_count : {check_result.failed_dataflow_count}")
         db.close()
     except Exception as e:
         log.error(f"❌ [AUTO-CHECK] Error: {e}", exc_info=True)
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def _run_domo_relogin():
@@ -240,20 +239,21 @@ def _run_domo_relogin():
     log.info("⏰ DOMO midnight re-login triggered")
     try:
         from app.config import get_settings
-        from app.routers.auth import get_auth, _save_session
+        from app.repositories.auth_repo import AuthRepository
+        from app.core.database import SessionLocal
 
         settings = get_settings()
         if not settings.domo_username or not settings.domo_password:
             log.warning("⚠️ DOMO credentials chưa cấu hình trong .env, bỏ qua.")
             return
 
-        auth = get_auth()
-        result = auth.login(settings.domo_username, settings.domo_password)
-        if result["success"]:
-            _save_session(auth)
-            log.info(f"✅ DOMO re-login thành công: {auth.username}")
-        else:
-            log.error(f"❌ DOMO re-login thất bại: {result['message']}")
+        with SessionLocal() as db:
+            repo = AuthRepository(db)
+            result = repo.login(settings.domo_username, settings.domo_password)
+            if result.success:
+                log.info(f"✅ DOMO re-login thành công: {result.username}")
+            else:
+                log.error(f"❌ DOMO re-login thất bại: {result.message}")
     except Exception as e:
         log.error(f"❌ DOMO re-login error: {e}", exc_info=True)
 
@@ -281,8 +281,10 @@ def init_scheduler(config: dict | None = None):
 
     if config is None:
         try:
-            from app.routers.monitor import _load_alert_config
-            config = _load_alert_config()
+            from app.core.database import SessionLocal
+            from app.repositories.monitor_repo import MonitorRepository
+            with SessionLocal() as db:
+                config = MonitorRepository(db).load_alert_config()
         except Exception:
             config = {}
 

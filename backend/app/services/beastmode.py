@@ -9,7 +9,7 @@ from datetime import datetime
 from aiohttp import ClientSession
 
 from app.core.api import DomoAPI
-from app.core.db import DomoDatabase
+from sqlalchemy.orm import Session
 from app.core.logger import DomoLogger
 
 log = DomoLogger("beastmode")
@@ -24,7 +24,7 @@ class BeastModeService:
 
 
 
-    def __init__(self, api: DomoAPI, db: DomoDatabase):
+    def __init__(self, api: DomoAPI, db: Session):
         self.api = api
         self.db = db
 

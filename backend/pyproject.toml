@@ -9,12 +9,20 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "requests>=2.31.0",
     "aiohttp>=3.9.0",
-    "playwright>=1.40.0",  # Optional: chỉ cần nếu dùng CDP login
+    "playwright>=1.40.0", # Optional: chỉ cần nếu dùng CDP login
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "apscheduler>=3.10.0",
+    "sqlalchemy>=2.0.49",
 ]
 
 [project.scripts]
 domo = "app.main:start"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]
