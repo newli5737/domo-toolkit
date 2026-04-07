@@ -32,3 +32,10 @@ class CrawlJob(Base):
     step_name = Column(String, default='')
     step_processed = Column(Integer, default=0)
     step_total = Column(Integer, default=0)
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key = Column(String(100), primary_key=True)
+    value = Column(String)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
