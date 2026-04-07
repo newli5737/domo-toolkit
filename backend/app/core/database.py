@@ -40,8 +40,15 @@ def bulk_upsert(session, model, rows: list[dict], index_elements: list[str]):
 
     for r in rows:
         stmt = insert(model).values(**r)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=index_elements,
-            set_={k: v for k, v in r.items() if k not in index_elements}
-        )
+        update_cols = {k: v for k, v in r.items() if k not in index_elements}
+        
+        if update_cols:
+            stmt = stmt.on_conflict_do_update(
+                index_elements=index_elements,
+                set_=update_cols
+            )
+        else:
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=index_elements
+            )
         session.execute(stmt)
