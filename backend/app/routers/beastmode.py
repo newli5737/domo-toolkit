@@ -143,6 +143,7 @@ async def delete_beastmode(bm_id: int, db: Session = Depends(get_db), auth: Sess
 @router.websocket("/ws/progress")
 async def ws_progress(websocket: WebSocket):
     """WebSocket: nhận crawl progress real-time."""
+    await websocket.accept()
     register_ws_client(websocket, asyncio.get_event_loop())
 
     try:

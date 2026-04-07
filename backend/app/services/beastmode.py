@@ -198,9 +198,7 @@ class BeastModeService:
                             self.db.execute(update(BeastMode).where(BeastMode.id == r["id"]).values(expression=r["expression"], legacy_id=r["legacy_id"], column_positions=r["column_positions"]))
                         update_rows.clear()
                         for r in dep_rows:
-                            chk = self.db.query(BMDependencyMap).filter_by(bm_id=r["bm_id"], depends_on_bm_id=r["depends_on_bm_id"]).first()
-                            if not chk:
-                                self.db.add(BMDependencyMap(**r))
+                            self.db.merge(BMDependencyMap(**r))
                         dep_rows.clear()
                         self.db.commit()
                     db_time = time.time() - db_start
