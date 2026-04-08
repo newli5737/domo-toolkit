@@ -4,7 +4,7 @@ import csv
 import io
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_
 
 from app.config import get_settings
 from app.core.logger import DomoLogger
@@ -110,13 +110,25 @@ class MonitorRepository:
     # ─── Alerts ────────────────────────────────────────────
 
     def get_alerts_from_db(self) -> AlertDataResponse:
+        # Exclude DISABLED datasets
         failed_ds = self.db.query(Dataset).filter(
-            func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%')
+            func.upper(func.coalesce(Dataset.dataset_status, '')).not_like('DISABLED%'),
+            or_(
+                func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataset.last_execution_state, '')).like('ERROR%'),
+                func.upper(func.coalesce(Dataset.dataset_status, '')).like('ERROR%')
+            )
         ).all()
-        
+
+        # Exclude DISABLED dataflows
         failed_df = self.db.query(Dataflow).filter(
-            (func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('FAILED%')) |
-            (func.upper(func.coalesce(Dataflow.status, '')).like('FAILED%'))
+            func.upper(func.coalesce(Dataflow.status, '')).not_like('DISABLED%'),
+            or_(
+                func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataflow.status, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('ERROR%'),
+                func.upper(func.coalesce(Dataflow.status, '')).like('ERROR%')
+            )
         ).all()
         
         all_ds = [{"id": ds.id, "name": ds.name, "provider_type": ds.provider_type, "last_execution_state": ds.last_execution_state, "card_count": ds.card_count} for ds in failed_ds]
@@ -145,14 +157,24 @@ class MonitorRepository:
         if provider_type.strip():
             rows = self.db.query(Dataset).filter(
                 func.lower(Dataset.provider_type) == func.lower(provider_type.strip()),
-                func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%')
+                func.upper(func.coalesce(Dataset.dataset_status, '')).not_like('DISABLED%'),
+                or_(
+                    func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%'),
+                    func.upper(func.coalesce(Dataset.last_execution_state, '')).like('ERROR%'),
+                    func.upper(func.coalesce(Dataset.dataset_status, '')).like('ERROR%')
+                )
             ).all()
             failed_by_type = [{"id": r.id, "name": r.name} for r in rows]
 
         # Cond 2: card >= N FAILED
         rows_card = self.db.query(Dataset).filter(
             Dataset.card_count >= min_card_count,
-            func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%')
+            func.upper(func.coalesce(Dataset.dataset_status, '')).not_like('DISABLED%'),
+            or_(
+                func.upper(func.coalesce(Dataset.last_execution_state, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataset.last_execution_state, '')).like('ERROR%'),
+                func.upper(func.coalesce(Dataset.dataset_status, '')).like('ERROR%')
+            )
         ).all()
         failed_by_card = [{"id": r.id, "name": r.name} for r in rows_card]
 
@@ -166,9 +188,13 @@ class MonitorRepository:
 
         # Dataflows FAILED (exclude DISABLED)
         rows_df = self.db.query(Dataflow).filter(
-            func.upper(func.coalesce(Dataflow.status, '')) != 'DISABLED',
-            (func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('FAILED%')) |
-            (func.upper(func.coalesce(Dataflow.status, '')).like('FAILED%'))
+            func.upper(func.coalesce(Dataflow.status, '')).not_like('DISABLED%'),
+            or_(
+                func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataflow.status, '')).like('FAILED%'),
+                func.upper(func.coalesce(Dataflow.last_execution_state, '')).like('ERROR%'),
+                func.upper(func.coalesce(Dataflow.status, '')).like('ERROR%')
+            )
         ).all()
         all_failed_df = [{"id": r.id, "name": r.name} for r in rows_df]
 

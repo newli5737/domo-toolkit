@@ -202,8 +202,8 @@ class HealthCheckService:
 
             is_disabled = df_status.upper() == "DISABLED" if df_status else False
             is_failed = not is_disabled and (
-                (last_state and "FAILED" in last_state.upper()) or
-                (df_status and "FAILED" in df_status.upper())
+                any(x in (last_state or "").upper() for x in ["FAILED", "ERROR"]) or
+                any(x in (df_status or "").upper() for x in ["FAILED", "ERROR"])
             )
 
             if is_failed:

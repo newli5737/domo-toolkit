@@ -107,8 +107,9 @@ def _run_auto_check(manual_req=None, auth_override=None):
         # Thống kê trạng thái dataflow
         from collections import Counter
         df_state_dist = Counter(df.get("last_execution_state", "") or "UNKNOWN" for df in dataflow_details)
-        df_failed_list = [df for df in dataflow_details if "FAILED" in (df.get("last_execution_state") or "").upper()
-                          or "FAILED" in (df.get("status") or "").upper()]
+        df_failed_list = [df for df in dataflow_details if
+                          any(x in (df.get("last_execution_state") or "").upper() for x in ["FAILED", "ERROR"]) or
+                          any(x in (df.get("status") or "").upper() for x in ["FAILED", "ERROR"])]
 
         log.info(f"[STEP 1] Execution state distribution: {dict(df_state_dist)}")
         log.info(f"[STEP 1] Dataflows FAILED: {len(df_failed_list)} / {len(dataflow_details)}")
@@ -204,11 +205,11 @@ def _run_auto_check(manual_req=None, auth_override=None):
                     "FROM datasets WHERE LOWER(provider_type) = LOWER(:pt) AND card_count >= :mc "
                     "ORDER BY card_count DESC LIMIT 20"
                 ), {"pt": pt, "mc": mc}).mappings().all()
-                failed_cands = [r for r in (candidates or []) if "FAILED" in (r.get("last_execution_state") or "").upper()]
+                failed_cands = [r for r in (candidates or []) if any(x in (r.get("last_execution_state") or "").upper() for x in ["FAILED", "ERROR"])]
                 log.info(f"[STEP 3] Datasets khớp điều kiện (type='{pt}', card>={mc}): {len(candidates or [])} cái")
                 for r in (candidates or [])[:10]:
                     state = r.get("last_execution_state") or "-"
-                    log.info(f"  {'❌' if 'FAILED' in state.upper() else '✅'} [{r['id']}] {r.get('name','')[:50]:50s} | cards={r.get('card_count',0):4d} | exec={state}")
+                    log.info(f"  {'❌' if any(x in state.upper() for x in ['FAILED', 'ERROR']) else '✅'} [{r['id']}] {r.get('name','')[:50]:50s} | cards={r.get('card_count',0):4d} | exec={state}")
                 log.info(f"[STEP 3] → Trong đó FAILED: {len(failed_cands)} cái")
                 if failed_cands:
                     log.info(f"[STEP 3] ⚠️  Có FAILED → KHÔNG post Backlog")
