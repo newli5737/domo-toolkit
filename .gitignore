@@ -48,3 +48,8 @@ backend/exact_diff.py
 backend/compare.py
 backend/check_cols.py
 backend/test_load.py
+backend/test_export.py
+
+# Cookie / session files (root)
+astecpaints-co-jp*.json
+astecpaints-co-jp*.com
