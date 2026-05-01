@@ -1,0 +1,2270 @@
+{
+    "id": 186671670,
+    "urn": "186671670",
+    "definition": {
+        "subscriptions": {
+            "main": {
+                "name": "main",
+                "columns": [
+                    {
+                        "formulaId": "calculation_18825d2c-5228-49b5-a24d-830a4fee01af",
+                        "mapping": "ROW"
+                    },
+                    {
+                        "aggregation": "SUM",
+                        "formulaId": "calculation_37b91876-122d-4516-958c-8c03e3018d1f",
+                        "mapping": "VALUE",
+                        "alias": "当年"
+                    },
+                    {
+                        "aggregation": "SUM",
+                        "formulaId": "calculation_628d44f9-52a8-4f7e-ab3a-518683ec3a80",
+                        "mapping": "VALUE",
+                        "alias": "前年"
+                    },
+                    {
+                        "formulaId": "calculation_a77d4676-4fe2-4eeb-8600-2915563d9e91",
+                        "mapping": "VALUE",
+                        "alias": "昨対比",
+                        "format": {
+                            "type": "percent",
+                            "format": "###,###.00",
+                            "commas": true,
+                            "percentMultiplied": true,
+                            "precision": 2,
+                            "percent": true,
+                            "abbreviate": false
+                        }
+                    }
+                ],
+                "filters": [
+                    {
+                        "column": "BLカテゴリ",
+                        "values": [
+                            "課題リスト"
+                        ],
+                        "filterType": "LEGACY",
+                        "operand": "IN",
+                        "dataType": "string"
+                    },
+                    {
+                        "column": "calculation_18825d2c-5228-49b5-a24d-830a4fee01af",
+                        "values": [
+                            ""
+                        ],
+                        "filterType": "LEGACY",
+                        "operand": "NOT_IN",
+                        "dataType": "string"
+                    }
+                ],
+                "dateGrain": {
+                    "column": "請求日"
+                },
+                "orderBy": [],
+                "groupBy": [
+                    {
+                        "formulaId": "calculation_18825d2c-5228-49b5-a24d-830a4fee01af"
+                    }
+                ],
+                "fiscal": false,
+                "projection": false,
+                "distinct": false
+            }
+        },
+        "formulas": [
+            {
+                "templateId": 14379,
+                "id": "calculation_0969de81-3d35-45b1-a406-4fed4c8989c6",
+                "name": "完了案件売り上げ",
+                "formula": "ifnull(sum(CASE \n WHEN `ステータス名` = '完了' THEN `税抜費用（int）` * `ウェイト` / 10\nEND), 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 23
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 44
+                    },
+                    {
+                        "columnName": "`ウェイト`",
+                        "columnPosition": 58
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14409,
+                "id": "calculation_79d81ef3-54bf-485d-a266-04cb166c1ada",
+                "name": "累計予実差異（見込み）",
+                "formula": "max(ifnull(`累計売上額（見込み）`, 0))\n-\nsum(ifnull(`累計売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`累計売上額（見込み）`",
+                        "columnPosition": 11
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 42
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 15086,
+                "id": "calculation_a5dbc72a-9d4f-4b04-9d37-e8ed8cf87086",
+                "name": "登録者名（@以下削除）",
+                "formula": "CASE \n  WHEN INSTR(`登録者`, '@') > 0 THEN \n    LEFT(`登録者`, INSTR(`タスクの担当者名`, '@') - 1)\n  ELSE \n    `登録者`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`登録者`",
+                        "columnPosition": 19
+                    },
+                    {
+                        "columnName": "`登録者`",
+                        "columnPosition": 50
+                    },
+                    {
+                        "columnName": "`タスクの担当者名`",
+                        "columnPosition": 63
+                    },
+                    {
+                        "columnName": "`登録者`",
+                        "columnPosition": 97
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 1,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14427,
+                "id": "calculation_3583f029-7a03-4616-a974-2fa37a7742f0",
+                "name": "ERAWANコード（数字）",
+                "formula": "CASE \n  WHEN INSTR(`ERAWANコード`, '／') > 0 THEN \n    SUBSTRING(`ERAWANコード`, 1, INSTR(`ERAWANコード`, '／') - 1)\n  ELSE \n    nullif('', '')\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`ERAWANコード`",
+                        "columnPosition": 19
+                    },
+                    {
+                        "columnName": "`ERAWANコード`",
+                        "columnPosition": 61
+                    },
+                    {
+                        "columnName": "`ERAWANコード`",
+                        "columnPosition": 83
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 3,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14446,
+                "id": "calculation_a361d0a3-53c4-47cb-8402-d506ed15ee8f",
+                "name": "法人営業部累計予算",
+                "formula": "CASE \n WHEN `カテゴリ` = '法人営業部' THEN `累計売上予算額`\n ELSE 0\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`カテゴリ`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 34
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14407,
+                "id": "calculation_1a91a8c0-48e0-4a87-9c03-6df6158967d0",
+                "name": "請求年月",
+                "formula": "CASE \n WHEN `請求日` is not null THEN concat(YEAR(`請求日`), '年 ', MONTH(`請求日`), '月')\n ELSE '未入力'\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 47
+                    },
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 67
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 7,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14460,
+                "id": "calculation_26839248-3746-4b3f-9fff-3d2570dcb274",
+                "name": "未完了案件売上（全体）",
+                "formula": "IFNULL(SUM(CASE\n  WHEN `ステータス名` NOT IN ('完了','請求済','定期更新') OR `ステータス名` IS NULL\n  THEN `税抜費用（int）` - 2 * IFNULL(`税抜外注費用`, 0)\n  ELSE 0\nEND), 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 23
+                    },
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 62
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 86
+                    },
+                    {
+                        "columnName": "`税抜外注費用`",
+                        "columnPosition": 111
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 4,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14448,
+                "id": "calculation_b333480a-d81c-4fbb-9bd9-e103e057e43c",
+                "name": "上期/下期",
+                "formula": "CASE\n WHEN MONTH(`請求日`) <= 6 THEN '上期'\n WHEN MONTH(`請求日`) >= 7 THEN '下期'\n ELSE nullif('', '')\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 17
+                    },
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 51
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 7,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14423,
+                "id": "calculation_d8e89f5a-d86f-4964-b500-396c6e632835",
+                "name": "粗利額",
+                "formula": "ifnull(`税抜費用（int）`, 0) - ifnull(`税抜外注費用`, 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 7
+                    },
+                    {
+                        "columnName": "`税抜外注費用`",
+                        "columnPosition": 32
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 4,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14426,
+                "id": "calculation_30078d5f-47c7-4389-aebd-c73b85496abe",
+                "name": "案件数",
+                "formula": "COUNT(DISTINCT \n     CASE WHEN `税抜費用（int）` > 0 THEN `課題ID` ELSE NULLIF('', '') END)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 31
+                    },
+                    {
+                        "columnName": "`課題ID`",
+                        "columnPosition": 52
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 1,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14458,
+                "id": "calculation_45cbe0c9-d68e-4fee-8d4c-3dee5daa1005",
+                "name": "課題タイトル（【】なし）",
+                "formula": "CASE \n  WHEN INSTR(`課題タイトル`, '】') > 0 THEN \n    SUBSTRING(`課題タイトル`, INSTR(`課題タイトル`, '】') + 1)\n  ELSE \n    `課題タイトル`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`課題タイトル`",
+                        "columnPosition": 19
+                    },
+                    {
+                        "columnName": "`課題タイトル`",
+                        "columnPosition": 58
+                    },
+                    {
+                        "columnName": "`課題タイトル`",
+                        "columnPosition": 74
+                    },
+                    {
+                        "columnName": "`課題タイトル`",
+                        "columnPosition": 106
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 3,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14408,
+                "id": "calculation_339b129f-4b47-4d8a-9010-f99015d97a58",
+                "name": "累計予実差異（実績）",
+                "formula": "max(ifnull(`累計売上額（実績）`, 0))\n-\nsum(ifnull(`累計売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`累計売上額（実績）`",
+                        "columnPosition": 11
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 41
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14385,
+                "id": "calculation_14e725b0-95aa-4485-bffc-dedc9187356f",
+                "name": "予実差異（見込み）",
+                "formula": "(ifnull(DOMO_BEAST_MODE(14462), 0) + ifnull(DOMO_BEAST_MODE(14460), 0))\n-\nsum(ifnull(`売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 85
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "formulaDependencies": [
+                    "14460",
+                    "14462"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14406,
+                "id": "calculation_36403b2b-ccad-4bc5-b694-fbf31b61284e",
+                "name": "請求年月表示順",
+                "formula": "CASE WHEN DOMO_BEAST_MODE(14407) = '請求日未入力' THEN 1 ELSE 99 END",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "cacheWindow": "non_dynamic",
+                "formulaDependencies": [
+                    "14407"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 3,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14424,
+                "id": "calculation_7dc4912d-3a47-4545-9b77-2b5c5cade6f8",
+                "name": "税抜外注費用（Null対応）",
+                "formula": "IFNULL(`税抜外注費用`, 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`税抜外注費用`",
+                        "columnPosition": 7
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 3,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14411,
+                "id": "calculation_dd45399f-34bb-498f-aa00-f52b16beedb6",
+                "name": "累計達成率（見込み）",
+                "formula": "ifnull(max(`累計売上額（見込み）`), 0)\n/\nmax(ifnull(`累計売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`累計売上額（見込み）`",
+                        "columnPosition": 11
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 42
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14383,
+                "id": "calculation_4309e51c-a3c9-49ed-ac29-c098da50463c",
+                "name": "達成率（見込み）",
+                "formula": "(ifnull(DOMO_BEAST_MODE(14462), 0) + ifnull(DOMO_BEAST_MODE(14460), 0))\n/\nsum(`売上予算額`)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 78
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "formulaDependencies": [
+                    "14460",
+                    "14462"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 15149,
+                "id": "calculation_628d44f9-52a8-4f7e-ab3a-518683ec3a80",
+                "name": "前年請求額（請求日ベース）",
+                "formula": "CASE \n  WHEN YEAR(`請求日`) = YEAR(CURRENT_DATE()) - 1 THEN `税抜費用（int）`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 18
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 57
+                    }
+                ],
+                "cacheWindow": "day",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 15145,
+                "id": "calculation_a77d4676-4fe2-4eeb-8600-2915563d9e91",
+                "name": "昨対比（請求日ベース）",
+                "formula": "sum(DOMO_BEAST_MODE(15143))\n/\nsum(DOMO_BEAST_MODE(15149))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "cacheWindow": "day",
+                "formulaDependencies": [
+                    "15143",
+                    "15149"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": false,
+                "isAnalytic": false,
+                "referenceCount": 1,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14459,
+                "id": "calculation_76159559-d2db-4c70-a0f6-9541b9c26a40",
+                "name": "担当者名（@以下削除）",
+                "formula": "CASE \n  WHEN INSTR(`タスクの担当者名`, '@') > 0 THEN \n    LEFT(`タスクの担当者名`, INSTR(`タスクの担当者名`, '@') - 1)\n  ELSE \n    `タスクの担当者名`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`タスクの担当者名`",
+                        "columnPosition": 19
+                    },
+                    {
+                        "columnName": "`タスクの担当者名`",
+                        "columnPosition": 55
+                    },
+                    {
+                        "columnName": "`タスクの担当者名`",
+                        "columnPosition": 73
+                    },
+                    {
+                        "columnName": "`タスクの担当者名`",
+                        "columnPosition": 107
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 1,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14322,
+                "id": "calculation_844d4a2e-2842-4cf3-b564-b65c986587cb",
+                "name": "計上費用",
+                "formula": "AVG(`税抜費用（int）`) * (sum(`ウェイト`) / 10)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 4
+                    },
+                    {
+                        "columnName": "`ウェイト`",
+                        "columnPosition": 24
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DOUBLE",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14382,
+                "id": "calculation_b584ce5e-7132-4d75-b12a-40aa9b6db4d2",
+                "name": "達成率（実績）",
+                "formula": "ifnull(DOMO_BEAST_MODE(14462), 0)\n/\nSUM(ifnull(`売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 47
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "formulaDependencies": [
+                    "14462"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14447,
+                "id": "calculation_30d54a14-6374-40d0-9d67-8fec7a9579d8",
+                "name": "PT事業部累計予算",
+                "formula": "CASE \n WHEN `カテゴリ` = 'プロタイムズ事業部' THEN `累計売上予算額`\n ELSE 0\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`カテゴリ`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 38
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14445,
+                "id": "calculation_1ac1941c-2a27-4354-8f13-227ef6c0063c",
+                "name": "法人営業部予算",
+                "formula": "CASE \n WHEN `カテゴリ` = '法人営業部' THEN `売上予算額` \n ELSE 0\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`カテゴリ`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 34
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14462,
+                "id": "calculation_02e562fa-73c5-4e9b-b566-ed167bcb5d37",
+                "name": "完了案件売上（全体）",
+                "formula": "IFNULL(SUM(CASE\n  WHEN `ステータス名` IN ('完了','請求済','定期更新')\n  THEN `税抜費用（int）` - IFNULL(`税抜外注費用`, 0)\nEND), 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 23
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 62
+                    },
+                    {
+                        "columnName": "`税抜外注費用`",
+                        "columnPosition": 83
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 6,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14449,
+                "id": "calculation_18825d2c-5228-49b5-a24d-830a4fee01af",
+                "name": "請求月.",
+                "formula": "concat(MONTH(`請求日`), '月')",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 13
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 4,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14378,
+                "id": "calculation_0d43a876-6721-4e1f-97ea-bca2b9082d23",
+                "name": "未完了案件売り上げ",
+                "formula": "ifnull(sum(CASE \n WHEN `ステータス名` != '完了' OR `ステータス名` is null THEN `税抜費用（int）` * `ウェイト` / 10\n ELSE 0\nEND), 0)",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 23
+                    },
+                    {
+                        "columnName": "`ステータス名`",
+                        "columnPosition": 43
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 65
+                    },
+                    {
+                        "columnName": "`ウェイト`",
+                        "columnPosition": 79
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14444,
+                "id": "calculation_bdc94302-0666-4366-a931-bf35ae730afe",
+                "name": "PT事業部予算",
+                "formula": "CASE \n WHEN `カテゴリ` = 'プロタイムズ事業部' THEN `売上予算額` \n ELSE 0\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`カテゴリ`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 38
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14410,
+                "id": "calculation_ffaa0a8b-4cae-42d0-bdf8-05306963a7c5",
+                "name": "累計達成率（実績）",
+                "formula": "ifnull(max(`累計売上額（実績）`), 0)\n/\nmax(ifnull(`累計売上予算額`, 0))",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`累計売上額（実績）`",
+                        "columnPosition": 11
+                    },
+                    {
+                        "columnName": "`累計売上予算額`",
+                        "columnPosition": 41
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "DECIMAL",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 14384,
+                "id": "calculation_4b68f7e8-fe99-428c-9573-388509359977",
+                "name": "予実差異（実績）",
+                "formula": "ifnull(DOMO_BEAST_MODE(14462), 0)\n-\nsum(ifnull(`売上予算額`, 0))\n",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`売上予算額`",
+                        "columnPosition": 47
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "formulaDependencies": [
+                    "14462"
+                ],
+                "locked": false,
+                "owner": 2020772414,
+                "certificationStatus": "EXPIRED",
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": false,
+                "bignumber": false
+            },
+            {
+                "templateId": 15143,
+                "id": "calculation_37b91876-122d-4516-958c-8c03e3018d1f",
+                "name": "当年請求額（請求日ベース）",
+                "formula": "CASE \n  WHEN YEAR(`請求日`) = YEAR(CURRENT_DATE()) THEN `税抜費用（int）`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`請求日`",
+                        "columnPosition": 18
+                    },
+                    {
+                        "columnName": "`税抜費用（int）`",
+                        "columnPosition": 53
+                    }
+                ],
+                "cacheWindow": "day",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "LONG",
+                "isAggregatable": true,
+                "bignumber": false
+            },
+            {
+                "templateId": 14412,
+                "id": "calculation_23b6e8d5-5525-4c02-9b19-98e4e1bae222",
+                "name": "担当者（未入力対応）",
+                "formula": "CASE \n WHEN `担当者` is null THEN 'ウェイト未入力'\n ELSE `担当者`\nEND",
+                "variable": false,
+                "status": "VALID",
+                "persistedOnDataSource": true,
+                "columnPositions": [
+                    {
+                        "columnName": "`担当者`",
+                        "columnPosition": 12
+                    },
+                    {
+                        "columnName": "`担当者`",
+                        "columnPosition": 47
+                    }
+                ],
+                "cacheWindow": "non_dynamic",
+                "locked": false,
+                "owner": 2020772414,
+                "usedByOtherCards": true,
+                "isAnalytic": false,
+                "referenceCount": 2,
+                "isControlled": false,
+                "dataType": "STRING",
+                "isAggregatable": true,
+                "bignumber": false
+            }
+        ],
+        "conditionalFormats": [
+            {
+                "cardId": 186671670,
+                "condition": {
+                    "column": "calculation_a77d4676-4fe2-4eeb-8600-2915563d9e91",
+                    "values": [
+                        "1"
+                    ],
+                    "dataSourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+                    "filterType": "LEGACY",
+                    "operand": "GREAT_THAN_EQUALS_TO"
+                },
+                "format": {
+                    "color": "#D9EBFDFF",
+                    "textColor": "#242a2c",
+                    "textStyle": "PLAIN",
+                    "applyToRow": false
+                }
+            },
+            {
+                "cardId": 186671670,
+                "condition": {
+                    "column": "calculation_a77d4676-4fe2-4eeb-8600-2915563d9e91",
+                    "values": [
+                        "1"
+                    ],
+                    "dataSourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+                    "filterType": "LEGACY",
+                    "operand": "LESS_THAN"
+                },
+                "format": {
+                    "color": "#FDDDDDFF",
+                    "textColor": "#2e2828",
+                    "textStyle": "PLAIN",
+                    "applyToRow": false
+                }
+            }
+        ],
+        "annotations": [],
+        "dynamicTitle": {
+            "text": [
+                {
+                    "text": "売上昨対比",
+                    "type": "TEXT"
+                }
+            ]
+        },
+        "dynamicDescription": {
+            "text": [],
+            "displayOnCardDetails": true
+        },
+        "chartVersion": "12",
+        "charts": {
+            "main": {
+                "component": "main",
+                "chartType": "badge_pivot_table",
+                "overrides": {
+                    "total_row": "true",
+                    "series_filter": "none",
+                    "range_filter_y": "none",
+                    "header_row_fill_color": "#D9EBFDFF",
+                    "range_filter_time": "none",
+                    "collapsed_filters": "none",
+                    "header_col_fill_color": "#D9EBFDFF",
+                    "range_filter_x": "none",
+                    "subtotal_rows": "true",
+                    "hide_series": "none",
+                    "row_filter": "none",
+                    "total_col": "true",
+                    "column_sort": "[{\"column\":\"請求月.\",\"sort\":\"asc\",\"type\":\"STRING\"}]",
+                    "subtotal_columns": "true"
+                },
+                "goal": null
+            }
+        },
+        "allowTableDrill": true,
+        "segments": {
+            "active": [],
+            "definitions": []
+        },
+        "inputTable": false,
+        "modified": 1754460341000,
+        "controls": []
+    },
+    "columns": [
+        {
+            "id": "プロジェクト名",
+            "name": "プロジェクト名",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "プロジェクトID",
+            "name": "プロジェクトID",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "親課題ID",
+            "name": "親課題ID",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "課題ID",
+            "name": "課題ID",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "ステータスID",
+            "name": "ステータスID",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "ステータス名",
+            "name": "ステータス名",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "課題タイトル",
+            "name": "課題タイトル",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "タスクの担当者名",
+            "name": "タスクの担当者名",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "加盟店名",
+            "name": "加盟店名",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "開始日",
+            "name": "開始日",
+            "type": "date",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "期限日",
+            "name": "期限日",
+            "type": "date",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "税抜費用",
+            "name": "税抜費用",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者①",
+            "name": "担当者①",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者①のウェイト",
+            "name": "担当者①のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者②",
+            "name": "担当者②",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者②のウェイト",
+            "name": "担当者②のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "課題URL",
+            "name": "課題URL",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者③",
+            "name": "担当者③",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者③のウェイト",
+            "name": "担当者③のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者④",
+            "name": "担当者④",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者④のウェイト",
+            "name": "担当者④のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑤",
+            "name": "担当者⑤",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑤のウェイト",
+            "name": "担当者⑤のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "請求日",
+            "name": "請求日",
+            "type": "date",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "税抜外注費用",
+            "name": "税抜外注費用",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "ERAWANコード",
+            "name": "ERAWANコード",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "課題の登録日",
+            "name": "課題の登録日",
+            "type": "date",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑨のウェイト",
+            "name": "担当者⑨のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑧",
+            "name": "担当者⑧",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑧のウェイト",
+            "name": "担当者⑧のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑨",
+            "name": "担当者⑨",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑦のウェイト",
+            "name": "担当者⑦のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑦",
+            "name": "担当者⑦",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑥のウェイト",
+            "name": "担当者⑥のウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者⑥",
+            "name": "担当者⑥",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "AP加盟店ID",
+            "name": "AP加盟店ID",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "登録者",
+            "name": "登録者",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "親/子課題",
+            "name": "親/子課題",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "請求日（期）",
+            "name": "請求日（期）",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "税抜費用（int）",
+            "name": "税抜費用（int）",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "累計売上額（見込み）",
+            "name": "累計売上額（見込み）",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "累計売上額（実績）",
+            "name": "累計売上額（実績）",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "BLカテゴリ",
+            "name": "BLカテゴリ",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "請求年",
+            "name": "請求年",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者種別",
+            "name": "担当者種別",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "担当者",
+            "name": "担当者",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "種",
+            "name": "種",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "ウェイト",
+            "name": "ウェイト",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "カテゴリ",
+            "name": "カテゴリ",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "請求月",
+            "name": "請求月",
+            "type": "string",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "売上予算額",
+            "name": "売上予算額",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "累計売上予算額",
+            "name": "累計売上予算額",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "年",
+            "name": "年",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "月",
+            "name": "月",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "子課題数",
+            "name": "子課題数",
+            "type": "numeric",
+            "isCalculation": false,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "isControlled": false
+        },
+        {
+            "id": "calculation_3583f029-7a03-4616-a974-2fa37a7742f0",
+            "name": "ERAWANコード（数字）",
+            "type": "string",
+            "value": "CASE \n  WHEN INSTR(`ERAWANコード`, '／') > 0 THEN \n    SUBSTRING(`ERAWANコード`, 1, INSTR(`ERAWANコード`, '／') - 1)\n  ELSE \n    nullif('', '')\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14427,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_bdc94302-0666-4366-a931-bf35ae730afe",
+            "name": "PT事業部予算",
+            "type": "numeric",
+            "value": "CASE \n WHEN `カテゴリ` = 'プロタイムズ事業部' THEN `売上予算額` \n ELSE 0\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14444,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_30d54a14-6374-40d0-9d67-8fec7a9579d8",
+            "name": "PT事業部累計予算",
+            "type": "numeric",
+            "value": "CASE \n WHEN `カテゴリ` = 'プロタイムズ事業部' THEN `累計売上予算額`\n ELSE 0\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14447,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_b333480a-d81c-4fbb-9bd9-e103e057e43c",
+            "name": "上期/下期",
+            "type": "string",
+            "value": "CASE\n WHEN MONTH(`請求日`) <= 6 THEN '上期'\n WHEN MONTH(`請求日`) >= 7 THEN '下期'\n ELSE nullif('', '')\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14448,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_4b68f7e8-fe99-428c-9573-388509359977",
+            "name": "予実差異（実績）",
+            "type": "numeric",
+            "value": "ifnull(DOMO_BEAST_MODE(14462), 0)\n-\nsum(ifnull(`売上予算額`, 0))\n",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14384,
+            "functionTemplateDependencies": [
+                "14462"
+            ],
+            "isControlled": false
+        },
+        {
+            "id": "calculation_14e725b0-95aa-4485-bffc-dedc9187356f",
+            "name": "予実差異（見込み）",
+            "type": "numeric",
+            "value": "(ifnull(DOMO_BEAST_MODE(14462), 0) + ifnull(DOMO_BEAST_MODE(14460), 0))\n-\nsum(ifnull(`売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14385,
+            "functionTemplateDependencies": [
+                "14460",
+                "14462"
+            ],
+            "isControlled": false
+        },
+        {
+            "id": "calculation_628d44f9-52a8-4f7e-ab3a-518683ec3a80",
+            "name": "前年請求額（請求日ベース）",
+            "type": "numeric",
+            "value": "CASE \n  WHEN YEAR(`請求日`) = YEAR(CURRENT_DATE()) - 1 THEN `税抜費用（int）`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 15149,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_0969de81-3d35-45b1-a406-4fed4c8989c6",
+            "name": "完了案件売り上げ",
+            "type": "numeric",
+            "value": "ifnull(sum(CASE \n WHEN `ステータス名` = '完了' THEN `税抜費用（int）` * `ウェイト` / 10\nEND), 0)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14379,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_02e562fa-73c5-4e9b-b566-ed167bcb5d37",
+            "name": "完了案件売上（全体）",
+            "type": "numeric",
+            "value": "IFNULL(SUM(CASE\n  WHEN `ステータス名` IN ('完了','請求済','定期更新')\n  THEN `税抜費用（int）` - IFNULL(`税抜外注費用`, 0)\nEND), 0)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14462,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_37b91876-122d-4516-958c-8c03e3018d1f",
+            "name": "当年請求額（請求日ベース）",
+            "type": "numeric",
+            "value": "CASE \n  WHEN YEAR(`請求日`) = YEAR(CURRENT_DATE()) THEN `税抜費用（int）`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 15143,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_76159559-d2db-4c70-a0f6-9541b9c26a40",
+            "name": "担当者名（@以下削除）",
+            "type": "string",
+            "value": "CASE \n  WHEN INSTR(`タスクの担当者名`, '@') > 0 THEN \n    LEFT(`タスクの担当者名`, INSTR(`タスクの担当者名`, '@') - 1)\n  ELSE \n    `タスクの担当者名`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14459,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_23b6e8d5-5525-4c02-9b19-98e4e1bae222",
+            "name": "担当者（未入力対応）",
+            "type": "string",
+            "value": "CASE \n WHEN `担当者` is null THEN 'ウェイト未入力'\n ELSE `担当者`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14412,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_a77d4676-4fe2-4eeb-8600-2915563d9e91",
+            "name": "昨対比（請求日ベース）",
+            "type": "numeric",
+            "value": "sum(DOMO_BEAST_MODE(15143))\n/\nsum(DOMO_BEAST_MODE(15149))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 15145,
+            "functionTemplateDependencies": [
+                "15143",
+                "15149"
+            ],
+            "isControlled": false
+        },
+        {
+            "id": "calculation_0d43a876-6721-4e1f-97ea-bca2b9082d23",
+            "name": "未完了案件売り上げ",
+            "type": "numeric",
+            "value": "ifnull(sum(CASE \n WHEN `ステータス名` != '完了' OR `ステータス名` is null THEN `税抜費用（int）` * `ウェイト` / 10\n ELSE 0\nEND), 0)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14378,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_26839248-3746-4b3f-9fff-3d2570dcb274",
+            "name": "未完了案件売上（全体）",
+            "type": "numeric",
+            "value": "IFNULL(SUM(CASE\n  WHEN `ステータス名` NOT IN ('完了','請求済','定期更新') OR `ステータス名` IS NULL\n  THEN `税抜費用（int）` - 2 * IFNULL(`税抜外注費用`, 0)\n  ELSE 0\nEND), 0)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14460,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_30078d5f-47c7-4389-aebd-c73b85496abe",
+            "name": "案件数",
+            "type": "numeric",
+            "value": "COUNT(DISTINCT \n     CASE WHEN `税抜費用（int）` > 0 THEN `課題ID` ELSE NULLIF('', '') END)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14426,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_1ac1941c-2a27-4354-8f13-227ef6c0063c",
+            "name": "法人営業部予算",
+            "type": "numeric",
+            "value": "CASE \n WHEN `カテゴリ` = '法人営業部' THEN `売上予算額` \n ELSE 0\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14445,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_a361d0a3-53c4-47cb-8402-d506ed15ee8f",
+            "name": "法人営業部累計予算",
+            "type": "numeric",
+            "value": "CASE \n WHEN `カテゴリ` = '法人営業部' THEN `累計売上予算額`\n ELSE 0\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14446,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_a5dbc72a-9d4f-4b04-9d37-e8ed8cf87086",
+            "name": "登録者名（@以下削除）",
+            "type": "string",
+            "value": "CASE \n  WHEN INSTR(`登録者`, '@') > 0 THEN \n    LEFT(`登録者`, INSTR(`タスクの担当者名`, '@') - 1)\n  ELSE \n    `登録者`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 15086,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_7dc4912d-3a47-4545-9b77-2b5c5cade6f8",
+            "name": "税抜外注費用（Null対応）",
+            "type": "numeric",
+            "value": "IFNULL(`税抜外注費用`, 0)",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14424,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_d8e89f5a-d86f-4964-b500-396c6e632835",
+            "name": "粗利額",
+            "type": "numeric",
+            "value": "ifnull(`税抜費用（int）`, 0) - ifnull(`税抜外注費用`, 0)",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14423,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_339b129f-4b47-4d8a-9010-f99015d97a58",
+            "name": "累計予実差異（実績）",
+            "type": "numeric",
+            "value": "max(ifnull(`累計売上額（実績）`, 0))\n-\nsum(ifnull(`累計売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14408,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_79d81ef3-54bf-485d-a266-04cb166c1ada",
+            "name": "累計予実差異（見込み）",
+            "type": "numeric",
+            "value": "max(ifnull(`累計売上額（見込み）`, 0))\n-\nsum(ifnull(`累計売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14409,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_ffaa0a8b-4cae-42d0-bdf8-05306963a7c5",
+            "name": "累計達成率（実績）",
+            "type": "numeric",
+            "value": "ifnull(max(`累計売上額（実績）`), 0)\n/\nmax(ifnull(`累計売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14410,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_dd45399f-34bb-498f-aa00-f52b16beedb6",
+            "name": "累計達成率（見込み）",
+            "type": "numeric",
+            "value": "ifnull(max(`累計売上額（見込み）`), 0)\n/\nmax(ifnull(`累計売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14411,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_844d4a2e-2842-4cf3-b564-b65c986587cb",
+            "name": "計上費用",
+            "type": "numeric",
+            "value": "AVG(`税抜費用（int）`) * (sum(`ウェイト`) / 10)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14322,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_45cbe0c9-d68e-4fee-8d4c-3dee5daa1005",
+            "name": "課題タイトル（【】なし）",
+            "type": "string",
+            "value": "CASE \n  WHEN INSTR(`課題タイトル`, '】') > 0 THEN \n    SUBSTRING(`課題タイトル`, INSTR(`課題タイトル`, '】') + 1)\n  ELSE \n    `課題タイトル`\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14458,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_1a91a8c0-48e0-4a87-9c03-6df6158967d0",
+            "name": "請求年月",
+            "type": "string",
+            "value": "CASE \n WHEN `請求日` is not null THEN concat(YEAR(`請求日`), '年 ', MONTH(`請求日`), '月')\n ELSE '未入力'\nEND",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14407,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_36403b2b-ccad-4bc5-b694-fbf31b61284e",
+            "name": "請求年月表示順",
+            "type": "numeric",
+            "value": "CASE WHEN DOMO_BEAST_MODE(14407) = '請求日未入力' THEN 1 ELSE 99 END",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14406,
+            "functionTemplateDependencies": [
+                "14407"
+            ],
+            "isControlled": false
+        },
+        {
+            "id": "calculation_18825d2c-5228-49b5-a24d-830a4fee01af",
+            "name": "請求月.",
+            "type": "string",
+            "value": "concat(MONTH(`請求日`), '月')",
+            "isCalculation": true,
+            "isAggregatable": true,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14449,
+            "isControlled": false
+        },
+        {
+            "id": "calculation_b584ce5e-7132-4d75-b12a-40aa9b6db4d2",
+            "name": "達成率（実績）",
+            "type": "numeric",
+            "value": "ifnull(DOMO_BEAST_MODE(14462), 0)\n/\nSUM(ifnull(`売上予算額`, 0))",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14382,
+            "functionTemplateDependencies": [
+                "14462"
+            ],
+            "isControlled": false
+        },
+        {
+            "id": "calculation_4309e51c-a3c9-49ed-ac29-c098da50463c",
+            "name": "達成率（見込み）",
+            "type": "numeric",
+            "value": "(ifnull(DOMO_BEAST_MODE(14462), 0) + ifnull(DOMO_BEAST_MODE(14460), 0))\n/\nsum(`売上予算額`)",
+            "isCalculation": true,
+            "isAggregatable": false,
+            "isEncrypted": false,
+            "hidden": false,
+            "order": 0,
+            "sourceId": "f8258ef0-ed33-411d-a6cd-31d987522ad2",
+            "templateId": 14383,
+            "functionTemplateDependencies": [
+                "14460",
+                "14462"
+            ],
+            "isControlled": false
+        }
+    ],
+    "drillpath": [],
+    "embedded": false,
+    "dataSourceWrite": true
+}

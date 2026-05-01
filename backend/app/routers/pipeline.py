@@ -2,26 +2,41 @@
 from fastapi import APIRouter, BackgroundTasks, Query
 from pydantic import BaseModel
 from typing import Optional
-import os
-import time
-import threading
+import os, time, threading, json
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
-# ── In-memory state ──────────────────────────────────
 _current_run: dict = {}
 _run_lock = threading.Lock()
+DATAFLOW_BASE = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "dataFlow"))
 
-DATAFLOW_BASE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "dataFlow")
 
+def _load_config(dataflow_id: str) -> dict:
+    cfg_path = os.path.join(DATAFLOW_BASE, dataflow_id, "config.json")
+    if os.path.exists(cfg_path):
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"name": f"Dataflow {dataflow_id}", "output_display_name": "output", "cards": []}
+
+
+def _save_config(dataflow_id: str, cfg: dict):
+    cfg_path = os.path.join(DATAFLOW_BASE, dataflow_id, "config.json")
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+
+def _db_path(dataflow_id: str) -> str:
+    return os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput", "output.duckdb"))
+
+
+# ── Models ──────────────────────────────────────────────
 
 class PipelineRunRequest(BaseModel):
     dataflow_id: str = "215"
-    reference_date: Optional[str] = None  # YYYY-MM-DD
-
+    reference_date: Optional[str] = None
 
 class PipelineStatusResponse(BaseModel):
-    status: str  # idle | running | success | failed
+    status: str
     dataflow_id: Optional[str] = None
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
@@ -32,7 +47,6 @@ class PipelineStatusResponse(BaseModel):
     error: Optional[str] = None
     models: Optional[list] = None
 
-
 class PipelineDataResponse(BaseModel):
     columns: list[str]
     data: list[dict]
@@ -41,8 +55,9 @@ class PipelineDataResponse(BaseModel):
     page_size: int
 
 
+# ── Pipeline execution ──────────────────────────────────
+
 def _run_pipeline(dataflow_id: str, reference_date: Optional[str]):
-    """Background task: execute the DuckDB ETL pipeline."""
     global _current_run
     input_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "datainput"))
     output_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput"))
@@ -70,70 +85,76 @@ def _run_pipeline(dataflow_id: str, reference_date: Optional[str]):
                 "output_path": result.output_path,
                 "error": result.error,
                 "models": [
-                    {
-                        "name": m.name,
-                        "duration_ms": round(m.duration_ms, 1),
-                        "row_count": m.row_count,
-                        "error": m.error,
-                    }
+                    {"name": m.name, "duration_ms": round(m.duration_ms, 1), "row_count": m.row_count, "error": m.error}
                     for m in result.models
                 ],
             })
     except Exception as e:
         with _run_lock:
-            _current_run.update({
-                "status": "failed",
-                "finished_at": time.time(),
-                "error": str(e),
-            })
+            _current_run.update({"status": "failed", "finished_at": time.time(), "error": str(e)})
 
 
 @router.post("/run", response_model=PipelineStatusResponse)
 def trigger_pipeline(req: PipelineRunRequest, background_tasks: BackgroundTasks):
-    """Trigger a pipeline run in the background."""
     with _run_lock:
         if _current_run.get("status") == "running":
             return PipelineStatusResponse(
-                status="running",
-                dataflow_id=_current_run.get("dataflow_id"),
-                started_at=_current_run.get("started_at"),
-                reference_date=_current_run.get("reference_date"),
+                status="running", dataflow_id=_current_run.get("dataflow_id"),
+                started_at=_current_run.get("started_at"), reference_date=_current_run.get("reference_date"),
                 error="Pipeline is already running",
             )
-
     background_tasks.add_task(_run_pipeline, req.dataflow_id, req.reference_date)
     return PipelineStatusResponse(status="running", dataflow_id=req.dataflow_id, reference_date=req.reference_date)
 
 
 @router.get("/status", response_model=PipelineStatusResponse)
 def get_pipeline_status():
-    """Get current pipeline run status."""
     with _run_lock:
         if not _current_run:
             return PipelineStatusResponse(status="idle")
         return PipelineStatusResponse(**_current_run)
 
 
+# ── List dataflows ──────────────────────────────────────
+
+@router.get("/list")
+def list_dataflows():
+    """List all available dataflow pipelines."""
+    result = []
+    if os.path.isdir(DATAFLOW_BASE):
+        for d in sorted(os.listdir(DATAFLOW_BASE)):
+            dp = os.path.join(DATAFLOW_BASE, d)
+            if os.path.isdir(dp) and os.path.isdir(os.path.join(dp, "datainput")):
+                cfg = _load_config(d)
+                has_output = os.path.exists(os.path.join(dp, "dataoutput", "output.duckdb"))
+                result.append({
+                    "id": d,
+                    "name": cfg.get("name", f"Dataflow {d}"),
+                    "output_display_name": cfg.get("output_display_name", "output"),
+                    "has_output": has_output,
+                    "card_count": len(cfg.get("cards", [])),
+                })
+    return result
+
+
+# ── Data Explorer ───────────────────────────────────────
+
 @router.get("/data", response_model=PipelineDataResponse)
 def get_pipeline_data(
     dataflow_id: str = Query("215"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=10, le=1000),
-    category: Optional[str] = Query(None, description="Filter by BLカテゴリ"),
-    search: Optional[str] = Query(None, description="Search 課題タイトル"),
+    category: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
 ):
-    """Query pipeline output data with pagination."""
     import duckdb
-
-    db_path = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput", "output.duckdb"))
-    if not os.path.exists(db_path):
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
         return PipelineDataResponse(columns=[], data=[], total_rows=0, page=page, page_size=page_size)
 
-    con = duckdb.connect(db_path, read_only=True)
+    con = duckdb.connect(db, read_only=True)
     try:
-        # Build WHERE clause
-        conditions = []
-        params = []
+        conditions, params = [], []
         if category:
             conditions.append('"BLカテゴリ" = $1')
             params.append(category)
@@ -141,115 +162,77 @@ def get_pipeline_data(
             idx = len(params) + 1
             conditions.append(f'"課題タイトル" LIKE ${idx}')
             params.append(f"%{search}%")
-
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-        # Count
-        count_sql = f"SELECT COUNT(*) FROM pipeline_output {where}"
-        total = con.execute(count_sql, params).fetchone()[0]
-
-        # Fetch page
+        total = con.execute(f"SELECT COUNT(*) FROM pipeline_output {where}", params).fetchone()[0]
         offset = (page - 1) * page_size
-        data_sql = f"SELECT * FROM pipeline_output {where} LIMIT {page_size} OFFSET {offset}"
-        result = con.execute(data_sql, params)
+        result = con.execute(f"SELECT * FROM pipeline_output {where} LIMIT {page_size} OFFSET {offset}", params)
         columns = [desc[0] for desc in result.description]
         rows = result.fetchall()
 
-        # Convert to list of dicts (handle date/datetime serialization)
         data = []
         for row in rows:
             record = {}
             for col, val in zip(columns, row):
-                if hasattr(val, 'isoformat'):
-                    record[col] = val.isoformat()
-                else:
-                    record[col] = val
+                record[col] = val.isoformat() if hasattr(val, 'isoformat') else val
             data.append(record)
-
         return PipelineDataResponse(columns=columns, data=data, total_rows=total, page=page, page_size=page_size)
     finally:
         con.close()
 
 
+# ── Summary ─────────────────────────────────────────────
+
 @router.get("/summary")
 def get_pipeline_summary(dataflow_id: str = Query("215")):
-    """Get summary statistics from pipeline output."""
     import duckdb
-
-    db_path = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput", "output.duckdb"))
-    if not os.path.exists(db_path):
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
         return {"exists": False}
 
-    con = duckdb.connect(db_path, read_only=True)
+    con = duckdb.connect(db, read_only=True)
     try:
         total = con.execute("SELECT COUNT(*) FROM pipeline_output").fetchone()[0]
-
-        # By category
-        categories = con.execute("""
-            SELECT "BLカテゴリ", COUNT(*) as cnt 
-            FROM pipeline_output GROUP BY 1 ORDER BY 2 DESC
-        """).fetchall()
-
-        # By ERAWAN (top 10)
+        categories = con.execute('SELECT "BLカテゴリ", COUNT(*) FROM pipeline_output GROUP BY 1 ORDER BY 2 DESC').fetchall()
         erawan_top = con.execute("""
-            SELECT "ERAWANコード", COUNT(*) as cnt 
-            FROM pipeline_output 
-            WHERE "BLカテゴリ" = '課題リスト'
-            GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+            SELECT "ERAWANコード", COUNT(*) FROM pipeline_output 
+            WHERE "BLカテゴリ" = '課題リスト' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
         """).fetchall()
-
-        # By status
         statuses = con.execute("""
-            SELECT "ステータス名", COUNT(*) as cnt 
-            FROM pipeline_output 
-            WHERE "BLカテゴリ" = '課題リスト'
-            GROUP BY 1 ORDER BY 2 DESC
+            SELECT "ステータス名", COUNT(*) FROM pipeline_output 
+            WHERE "BLカテゴリ" = '課題リスト' GROUP BY 1 ORDER BY 2 DESC
         """).fetchall()
-
-        # Monthly trend
         monthly = con.execute("""
-            SELECT "請求年", "請求月", COUNT(*) as cnt, 
-                   SUM(CAST("税抜費用（int）" AS DOUBLE)) as revenue
-            FROM pipeline_output 
-            WHERE "BLカテゴリ" = '課題リスト' 
-              AND "請求年" IS NOT NULL
+            SELECT "請求年", "請求月", COUNT(*), SUM(CAST("税抜費用（int）" AS DOUBLE))
+            FROM pipeline_output WHERE "BLカテゴリ" = '課題リスト' AND "請求年" IS NOT NULL
             GROUP BY 1, 2 ORDER BY 1, 2
         """).fetchall()
-
-        # Budget vs actual
         budget = con.execute("""
             SELECT "カテゴリ", "請求月", "売上予算額", "累計売上予算額"
-            FROM pipeline_output
-            WHERE "BLカテゴリ" = '予算'
-            ORDER BY "カテゴリ", "請求月"
+            FROM pipeline_output WHERE "BLカテゴリ" = '予算' ORDER BY "カテゴリ", "請求月"
         """).fetchall()
 
         return {
-            "exists": True,
-            "total_rows": total,
+            "exists": True, "total_rows": total,
             "categories": [{"name": c[0], "count": c[1]} for c in categories],
             "erawan_top": [{"name": e[0], "count": e[1]} for e in erawan_top],
             "statuses": [{"name": s[0], "count": s[1]} for s in statuses],
-            "monthly": [
-                {"year": m[0], "month": m[1], "count": m[2], "revenue": m[3]}
-                for m in monthly
-            ],
-            "budget": [
-                {"category": b[0], "month": b[1], "target": b[2], "cumulative": b[3]}
-                for b in budget
-            ],
+            "monthly": [{"year": m[0], "month": m[1], "count": m[2], "revenue": m[3]} for m in monthly],
+            "budget": [{"category": b[0], "month": b[1], "target": b[2], "cumulative": b[3]} for b in budget],
         }
     finally:
         con.close()
 
 
+# ── Datasets ────────────────────────────────────────────
+
 @router.get("/datasets")
 def get_datasets(dataflow_id: str = Query("215")):
-    """List input and output datasets."""
     import duckdb
 
     input_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "datainput"))
     output_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput"))
+    cfg = _load_config(dataflow_id)
 
     inputs = []
     if os.path.isdir(input_dir):
@@ -260,118 +243,262 @@ def get_datasets(dataflow_id: str = Query("215")):
                 rows = None
                 if f.endswith(".csv"):
                     try:
-                        con = duckdb.connect()
-                        rows = con.execute(f"SELECT COUNT(*) FROM read_csv_auto('{fp.replace(chr(92), '/')}')").fetchone()[0]
-                        con.close()
+                        c = duckdb.connect()
+                        rows = c.execute(f"SELECT COUNT(*) FROM read_csv_auto('{fp.replace(chr(92), '/')}')").fetchone()[0]
+                        c.close()
                     except Exception:
                         pass
                 inputs.append({"name": f, "size_bytes": size, "rows": rows})
 
     outputs = []
-    db_path = os.path.normpath(os.path.join(output_dir, "output.duckdb"))
+    db = _db_path(dataflow_id)
     csv_path = os.path.normpath(os.path.join(output_dir, "output.csv"))
-    if os.path.exists(db_path):
+    if os.path.exists(db):
         try:
-            con = duckdb.connect(db_path, read_only=True)
-            rows = con.execute("SELECT COUNT(*) FROM pipeline_output").fetchone()[0]
-            cols = con.execute("SELECT * FROM pipeline_output LIMIT 0").description
-            con.close()
+            c = duckdb.connect(db, read_only=True)
+            rows = c.execute("SELECT COUNT(*) FROM pipeline_output").fetchone()[0]
+            cols = c.execute("SELECT * FROM pipeline_output LIMIT 0").description
+            c.close()
             outputs.append({
                 "name": "output.duckdb",
-                "size_bytes": os.path.getsize(db_path),
+                "display_name": cfg.get("output_display_name", "output"),
+                "size_bytes": os.path.getsize(db),
                 "rows": rows,
                 "columns": len(cols),
+                "cards": cfg.get("cards", []),
+                "last_modified": os.path.getmtime(db),
             })
         except Exception:
             pass
     if os.path.exists(csv_path):
         outputs.append({
             "name": "output.csv",
+            "display_name": cfg.get("output_display_name", "output"),
             "size_bytes": os.path.getsize(csv_path),
         })
 
     return {"inputs": inputs, "outputs": outputs}
 
 
-@router.get("/card/yoy")
-def get_card_yoy(dataflow_id: str = Query("215")):
-    """Card 186671670: 売上昨対比 — Year-over-Year revenue pivot table.
-    
-    Beast modes translated from DOMO card definition:
-    - ROW: 請求月. = concat(MONTH(請求日), '月')
-    - 当年 = SUM(CASE WHEN YEAR(請求日) = YEAR(CURRENT_DATE) THEN 税抜費用(int))
-    - 前年 = SUM(CASE WHEN YEAR(請求日) = YEAR(CURRENT_DATE) - 1 THEN 税抜費用(int))
-    - 昨対比 = 当年 / 前年
-    Filter: BLカテゴリ = '課題リスト', 請求月. IS NOT NULL/empty
-    """
+@router.get("/datasets/detail")
+def get_dataset_detail(dataflow_id: str = Query("215")):
+    """Full column info, stats, linked cards for output dataset."""
     import duckdb
 
-    db_path = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput", "output.duckdb"))
-    if not os.path.exists(db_path):
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
         return {"exists": False}
 
-    con = duckdb.connect(db_path, read_only=True)
+    cfg = _load_config(dataflow_id)
+    con = duckdb.connect(db, read_only=True)
     try:
-        result = con.execute("""
-            WITH base AS (
-                SELECT
-                    CAST("請求日" AS DATE) AS billing_date,
-                    CAST("税抜費用（int）" AS BIGINT) AS amount
-                FROM pipeline_output
-                WHERE "BLカテゴリ" = '課題リスト'
-                  AND "請求日" IS NOT NULL
-            ),
-            current_year AS (
-                SELECT YEAR(CURRENT_DATE) AS cy
-            ),
-            monthly AS (
-                SELECT
-                    MONTH(b.billing_date) AS m,
-                    CONCAT(MONTH(b.billing_date), '月') AS month_label,
-                    SUM(CASE WHEN YEAR(b.billing_date) = cy.cy THEN b.amount END) AS current_year,
-                    SUM(CASE WHEN YEAR(b.billing_date) = cy.cy - 1 THEN b.amount END) AS prev_year
-                FROM base b, current_year cy
-                GROUP BY 1, 2, cy.cy
-                HAVING CONCAT(MONTH(b.billing_date), '月') != ''
-            )
-            SELECT
-                month_label,
-                COALESCE(current_year, 0) AS current_year,
-                COALESCE(prev_year, 0) AS prev_year,
-                CASE
-                    WHEN prev_year IS NOT NULL AND prev_year > 0
-                    THEN ROUND(CAST(current_year AS DOUBLE) / prev_year, 4)
-                    ELSE NULL
-                END AS yoy_ratio
-            FROM monthly
-            ORDER BY m
-        """).fetchall()
+        total = con.execute("SELECT COUNT(*) FROM pipeline_output").fetchone()[0]
+        desc = con.execute("SELECT * FROM pipeline_output LIMIT 0").description
+        sample = con.execute("SELECT * FROM pipeline_output LIMIT 3").fetchall()
 
-        # Totals
-        total_current = sum(r[1] for r in result)
-        total_prev = sum(r[2] for r in result)
-        total_yoy = round(total_current / total_prev, 4) if total_prev > 0 else None
-
-        rows = []
-        for r in result:
-            rows.append({
-                "month": r[0],
-                "current_year": r[1],
-                "prev_year": r[2],
-                "yoy_ratio": r[3],
+        columns = []
+        for i, d in enumerate(desc):
+            col_name = d[0]
+            col_type = str(d[1])
+            samples = [str(row[i]) if row[i] is not None else None for row in sample]
+            nulls = con.execute(f'SELECT COUNT(*) FROM pipeline_output WHERE "{col_name}" IS NULL').fetchone()[0]
+            distinct = con.execute(f'SELECT COUNT(DISTINCT "{col_name}") FROM pipeline_output').fetchone()[0]
+            columns.append({
+                "name": col_name, "type": col_type, "samples": samples,
+                "null_count": nulls, "distinct_count": distinct,
             })
 
         return {
             "exists": True,
-            "card_id": 186671670,
-            "title": "売上昨対比",
+            "display_name": cfg.get("output_display_name", "output"),
+            "total_rows": total,
+            "column_count": len(desc),
+            "columns": columns,
+            "cards": cfg.get("cards", []),
+            "last_modified": os.path.getmtime(db),
+            "size_bytes": os.path.getsize(db),
+        }
+    finally:
+        con.close()
+
+
+class RenameRequest(BaseModel):
+    dataflow_id: str = "215"
+    display_name: str
+
+@router.put("/datasets/rename")
+def rename_dataset(req: RenameRequest):
+    cfg = _load_config(req.dataflow_id)
+    cfg["output_display_name"] = req.display_name
+    _save_config(req.dataflow_id, cfg)
+    return {"ok": True, "display_name": req.display_name}
+
+
+# ── Card filter values ──────────────────────────────────
+
+@router.get("/card/filters")
+def get_card_filters(dataflow_id: str = Query("215")):
+    """Get distinct filter values for key columns (smart: only columns with <200 distinct)."""
+    import duckdb
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
+        return {"filters": []}
+
+    filter_columns = [
+        "BLカテゴリ", "ステータス名", "ERAWANコード", "プロジェクト名",
+        "カテゴリ", "担当者種別", "種", "請求日（期）",
+    ]
+
+    con = duckdb.connect(db, read_only=True)
+    try:
+        result = []
+        all_cols = [d[0] for d in con.execute("SELECT * FROM pipeline_output LIMIT 0").description]
+        for col in filter_columns:
+            if col not in all_cols:
+                continue
+            distinct = con.execute(f'SELECT COUNT(DISTINCT "{col}") FROM pipeline_output').fetchone()[0]
+            if distinct > 200:
+                continue
+            values = con.execute(f"""
+                SELECT "{col}", COUNT(*) as cnt FROM pipeline_output
+                WHERE "{col}" IS NOT NULL AND "{col}" != ''
+                GROUP BY 1 ORDER BY 2 DESC
+            """).fetchall()
+            result.append({
+                "column": col,
+                "values": [{"value": v[0], "count": v[1]} for v in values],
+            })
+        return {"filters": result}
+    finally:
+        con.close()
+
+
+# ── Card: 売上昨対比 (186671670) ────────────────────────
+
+@router.get("/card/yoy")
+def get_card_yoy(
+    dataflow_id: str = Query("215"),
+    bl_category: Optional[str] = Query(None),
+    status_name: Optional[str] = Query(None),
+    erawan: Optional[str] = Query(None),
+    project: Optional[str] = Query(None),
+):
+    """Card 186671670: YoY revenue pivot with optional filters."""
+    import duckdb
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
+        return {"exists": False}
+
+    con = duckdb.connect(db, read_only=True)
+    try:
+        filters = ['"BLカテゴリ" = \'課題リスト\'', '"請求日" IS NOT NULL']
+        if bl_category:
+            filters[0] = f'"BLカテゴリ" = \'{bl_category}\''
+        if status_name:
+            filters.append(f'"ステータス名" = \'{status_name}\'')
+        if erawan:
+            filters.append(f'"ERAWANコード" = \'{erawan}\'')
+        if project:
+            filters.append(f'"プロジェクト名" = \'{project}\'')
+        where = " AND ".join(filters)
+
+        result = con.execute(f"""
+            WITH base AS (
+                SELECT CAST("請求日" AS DATE) AS bd, CAST("税抜費用（int）" AS BIGINT) AS amt
+                FROM pipeline_output WHERE {where}
+            ),
+            cy AS (SELECT YEAR(CURRENT_DATE) AS y),
+            monthly AS (
+                SELECT MONTH(b.bd) AS m, CONCAT(MONTH(b.bd), '月') AS ml,
+                    SUM(CASE WHEN YEAR(b.bd) = cy.y THEN b.amt END) AS cur,
+                    SUM(CASE WHEN YEAR(b.bd) = cy.y - 1 THEN b.amt END) AS prev
+                FROM base b, cy GROUP BY 1, 2, cy.y
+                HAVING ml != ''
+            )
+            SELECT ml, COALESCE(cur, 0), COALESCE(prev, 0),
+                CASE WHEN prev > 0 THEN ROUND(CAST(cur AS DOUBLE) / prev, 4) END
+            FROM monthly ORDER BY m
+        """).fetchall()
+
+        total_cur = sum(r[1] for r in result)
+        total_prev = sum(r[2] for r in result)
+        return {
+            "exists": True, "card_id": 186671670, "title": "売上昨対比",
             "chart_type": "badge_pivot_table",
-            "rows": rows,
+            "rows": [{"month": r[0], "current_year": r[1], "prev_year": r[2], "yoy_ratio": r[3]} for r in result],
             "totals": {
-                "current_year": total_current,
-                "prev_year": total_prev,
-                "yoy_ratio": total_yoy,
+                "current_year": total_cur, "prev_year": total_prev,
+                "yoy_ratio": round(total_cur / total_prev, 4) if total_prev > 0 else None,
             },
+        }
+    finally:
+        con.close()
+
+
+# ── Card: 月別・ERAWANコード別売上額 (258978026) ───────
+
+@router.get("/card/revenue-by-year")
+def get_card_revenue_by_year(
+    dataflow_id: str = Query("215"),
+    bl_category: Optional[str] = Query(None),
+    status_name: Optional[str] = Query(None),
+    erawan: Optional[str] = Query(None),
+    project: Optional[str] = Query(None),
+):
+    """Card 258978026: Revenue by month pivoted by year.
+    ROW=請求月(concat MONTH, '月'), COLUMN=Year, VALUE=SUM(税抜費用)"""
+    import duckdb
+    db = _db_path(dataflow_id)
+    if not os.path.exists(db):
+        return {"exists": False}
+
+    con = duckdb.connect(db, read_only=True)
+    try:
+        filters = ['"BLカテゴリ" = \'課題リスト\'', '"ERAWANコード" IS NOT NULL', '"ERAWANコード" != \'\'', '"請求日" IS NOT NULL']
+        if bl_category:
+            filters[0] = f'"BLカテゴリ" = \'{bl_category}\''
+        if status_name:
+            filters.append(f'"ステータス名" = \'{status_name}\'')
+        if erawan:
+            filters.append(f'"ERAWANコード" = \'{erawan}\'')
+        if project:
+            filters.append(f'"プロジェクト名" = \'{project}\'')
+        where = " AND ".join(filters)
+
+        raw = con.execute(f"""
+            SELECT MONTH(CAST("請求日" AS DATE)) AS m,
+                   CONCAT(MONTH(CAST("請求日" AS DATE)), '月') AS month_label,
+                   YEAR(CAST("請求日" AS DATE)) AS yr,
+                   SUM(CAST("税抜費用（int）" AS BIGINT)) AS revenue
+            FROM pipeline_output WHERE {where}
+            GROUP BY 1, 2, 3 ORDER BY 1, 3
+        """).fetchall()
+
+        years = sorted(set(r[2] for r in raw))
+        months = []
+        seen = set()
+        for r in raw:
+            if r[1] not in seen:
+                seen.add(r[1])
+                months.append({"m": r[0], "label": r[1]})
+        months.sort(key=lambda x: x["m"])
+
+        rows = []
+        year_totals = {y: 0 for y in years}
+        for month in months:
+            row = {"month": month["label"]}
+            for y in years:
+                val = next((r[3] for r in raw if r[0] == month["m"] and r[2] == y), 0)
+                row[str(y)] = val or 0
+                year_totals[y] += val or 0
+            rows.append(row)
+
+        return {
+            "exists": True, "card_id": 258978026, "title": "月別・ERAWANコード別売上額",
+            "chart_type": "badge_pivot_table",
+            "years": years,
+            "rows": rows,
+            "totals": {str(y): year_totals[y] for y in years},
         }
     finally:
         con.close()

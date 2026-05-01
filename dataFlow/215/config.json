@@ -1,0 +1,20 @@
+{
+  "name": "Backlog PTJ加盟店サイト関連",
+  "output_display_name": "Backlog結合_運用課アカウント",
+  "cards": [
+    {
+      "id": 186671670,
+      "title": "売上昨対比",
+      "endpoint": "yoy",
+      "chart_type": "badge_pivot_table",
+      "description": "Year-over-Year revenue comparison by billing month"
+    },
+    {
+      "id": 258978026,
+      "title": "月別・ERAWANコード別売上額",
+      "endpoint": "revenue-by-year",
+      "chart_type": "badge_pivot_table",
+      "description": "Revenue by billing month pivoted by year"
+    }
+  ]
+}
