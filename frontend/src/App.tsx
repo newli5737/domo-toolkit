@@ -90,8 +90,8 @@ function MainLayout({ loggedIn, username, sidebarCollapsed, onToggle, onLogout, 
             loggedIn={loggedIn}
             username={username}
             collapsed={sidebarCollapsed}
-            onToggle={toggleSidebar}
-            onLogout={handleLogout}
+            onToggle={onToggle}
+            onLogout={onLogout}
           />
 
           <div className={`main-content flex-1 ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -99,7 +99,7 @@ function MainLayout({ loggedIn, username, sidebarCollapsed, onToggle, onLogout, 
               <Route path="/" element={<Dashboard />} />
               <Route path="/beastmode" element={<BeastModeCleanup readOnly={!loggedIn} />} />
               <Route path="/monitor" element={
-                loggedIn ? <Monitor /> : <Login onLoginSuccess={handleLogin} />
+                loggedIn ? <Monitor /> : <Login onLoginSuccess={onLoginSuccess} />
               } />
               <Route path="/settings" element={<Settings />} />
               <Route path="/guide" element={<Guide />} />
@@ -108,7 +108,7 @@ function MainLayout({ loggedIn, username, sidebarCollapsed, onToggle, onLogout, 
               <Route path="/datasets/:dataflowId" element={<DatasetDetailPage />} />
               <Route path="/card/:dataflowId/:cardEndpoint" element={<CardDetailPage />} />
               <Route path="/alert" element={<Alert />} />
-              <Route path="/login" element={<Login onLoginSuccess={handleLogin} />} />
+              <Route path="/login" element={<Login onLoginSuccess={onLoginSuccess} />} />
             </Routes>
           </div>
         </div>
