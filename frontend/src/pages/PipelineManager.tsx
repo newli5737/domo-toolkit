@@ -165,23 +165,23 @@ export default function PipelineManager() {
           <div className="animate-fadein">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
               <StatCard label="Total Rows" value={summary.total_rows.toLocaleString()} color="#3b82f6" icon={Database} />
-              <StatCard label="課題リスト" value={(summary.categories.find(c => c.name === '課題リスト')?.count ?? 0).toLocaleString()} color="#8b5cf6" icon={Layers} />
-              <StatCard label="ウェイト別課題" value={(summary.categories.find(c => c.name === 'ウェイト別課題')?.count ?? 0).toLocaleString()} color="#06b6d4" icon={BarChart3} />
-              <StatCard label="予算" value={(summary.categories.find(c => c.name === '予算')?.count ?? 0).toLocaleString()} color="#10b981" icon={TrendingUp} />
+              <StatCard label="課題リスト" value={(summary.categories?.find(c => c.name === '課題リスト')?.count ?? 0).toLocaleString()} color="#8b5cf6" icon={Layers} />
+              <StatCard label="ウェイト別課題" value={(summary.categories?.find(c => c.name === 'ウェイト別課題')?.count ?? 0).toLocaleString()} color="#06b6d4" icon={BarChart3} />
+              <StatCard label="予算" value={(summary.categories?.find(c => c.name === '予算')?.count ?? 0).toLocaleString()} color="#10b981" icon={TrendingUp} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
               <div className="card">
                 <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrendingUp style={{ width: 16, height: 16, color: '#3b82f6' }} /> Monthly Revenue
                 </div>
-                <div className="card-body"><BarChartSimple data={summary.monthly.filter(m => m.revenue > 0).slice(0, 12)} /></div>
+                <div className="card-body"><BarChartSimple data={(summary.monthly || []).filter(m => m.revenue > 0).slice(0, 12)} /></div>
               </div>
               <div className="card">
                 <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <PieChart style={{ width: 16, height: 16, color: '#8b5cf6' }} /> Top ERAWANコード
                 </div>
                 <div className="card-body">
-                  {summary.erawan_top.slice(0, 8).map((e, i) => (
+                  {(summary.erawan_top || []).slice(0, 8).map((e, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                       <div style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name || '(none)'}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>{e.count.toLocaleString()}</div>
