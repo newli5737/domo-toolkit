@@ -96,6 +96,30 @@ const translations = {
   'login.uploadCookie': { vi: 'Upload Cookie JSON', ja: 'Cookie JSONアップロード' },
   'login.processing': { vi: 'Đang xử lý...', ja: '処理中...' },
   'login.connectingTo': { vi: 'Đang kết nối tới', ja: '接続先' },
+
+  // Pipeline
+  'pipeline.title': { vi: 'Quản lý Pipeline', ja: 'パイプライン管理' },
+  'pipeline.run': { vi: 'Chạy Pipeline', ja: 'パイプライン実行' },
+  'pipeline.running': { vi: 'Đang chạy...', ja: '実行中...' },
+  'pipeline.idle': { vi: 'Chờ xử lý', ja: '待機中' },
+  'pipeline.success': { vi: 'Thành công', ja: '成功' },
+  'pipeline.failed': { vi: 'Thất bại', ja: '失敗' },
+  'pipeline.tab.overview': { vi: 'Tổng quan', ja: '概要' },
+  'pipeline.tab.datasets': { vi: 'Datasets', ja: 'データセット' },
+  'pipeline.tab.data': { vi: 'Dữ liệu', ja: 'データ参照' },
+  'pipeline.tab.steps': { vi: 'Các bước', ja: 'ステップ' },
+  'pipeline.totalRows': { vi: 'Tổng số dòng', ja: '合計行数' },
+  'pipeline.monthlyRevenue': { vi: 'Doanh thu theo tháng', ja: '月別売上' },
+  'pipeline.noData': { vi: 'Chưa có dữ liệu', ja: 'データなし' },
+  'pipeline.noRevenue': { vi: 'Chưa có dữ liệu doanh thu', ja: '売上データなし' },
+  'pipeline.inputDatasets': { vi: 'Datasets đầu vào', ja: '入力データセット' },
+  'pipeline.outputDatasets': { vi: 'Datasets đầu ra', ja: '出力データセット' },
+  'pipeline.syncDomo': { vi: 'Đồng bộ DOMO', ja: 'DOMO同期' },
+  'pipeline.syncing': { vi: 'Đang đồng bộ...', ja: '同期中...' },
+  'pipeline.viewDetail': { vi: 'Xem chi tiết →', ja: '詳細を見る →' },
+  'pipeline.search': { vi: 'Tìm kiếm...', ja: '検索...' },
+  'pipeline.allCategories': { vi: 'Tất cả danh mục', ja: '全カテゴリー' },
+  'pipeline.of': { vi: 'trên', ja: '件中' },
 } as const
 
 export type TranslationKey = keyof typeof translations

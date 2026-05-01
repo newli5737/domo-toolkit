@@ -7,6 +7,7 @@ import {
   FolderOpen, FileSpreadsheet, HardDrive, ChevronDown, CloudDownload
 } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
+import { useI18n } from '../i18n'
 import PipelineSteps from './pipeline/PipelineSteps'
 
 // ── Types ──
@@ -37,6 +38,7 @@ const STATUS_ICONS: Record<string, typeof CheckCircle2> = { idle: Clock, running
 
 export default function PipelineManager() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [dataflows, setDataflows] = useState<DataflowItem[]>([])
   const [dfId, setDfId] = useState('215')
   const [status, setStatus] = useState<PipelineStatus>({ status: 'idle' })
@@ -115,7 +117,7 @@ export default function PipelineManager() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Database className="icon" style={{ color: '#3b82f6' }} />
             <div>
-              <h1 style={{ margin: 0, fontSize: 20 }}>Pipeline Manager</h1>
+              <h1 style={{ margin: 0, fontSize: 20 }}>{t('pipeline.title')}</h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <ChevronDown style={{ width: 14, height: 14, color: '#64748b' }} />
                 <select value={dfId} onChange={e => switchDf(e.target.value)}
@@ -130,8 +132,8 @@ export default function PipelineManager() {
             <input type="date" value={refDate} onChange={e => setRefDate(e.target.value)} className="btn-outline"
               style={{ padding: '7px 12px', fontSize: 13, borderRadius: 8, border: '1px solid #e2e8f0' }} />
             <button className="btn btn-primary" onClick={runPipeline} disabled={status.status === 'running'} style={{ minWidth: 130 }}>
-              {status.status === 'running' ? <><Loader2 className="icon" style={{ animation: 'spin 1s linear infinite' }} /> Running...</>
-                : <><Play className="icon" /> Run Pipeline</>}
+              {status.status === 'running' ? <><Loader2 className="icon" style={{ animation: 'spin 1s linear infinite' }} /> {t('pipeline.running')}</>
+                : <><Play className="icon" /> {t('pipeline.run')}</>}
             </button>
           </div>
         </div>
@@ -144,7 +146,7 @@ export default function PipelineManager() {
             <StatusIcon style={{ width: 22, height: 22, color: sc.text, ...(status.status === 'running' ? { animation: 'spin 1s linear infinite' } : {}) }} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: sc.text, textTransform: 'capitalize' }}>{status.status}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: sc.text, textTransform: 'capitalize' }}>{status.status === 'idle' ? t('pipeline.idle') : status.status === 'running' ? t('pipeline.running') : status.status === 'success' ? t('pipeline.success') : t('pipeline.failed')}</div>
             <div style={{ fontSize: 12, color: '#64748b' }}>
               {status.duration_ms ? `${(status.duration_ms / 1000).toFixed(1)}s` : ''}
               {status.output_row_count ? ` · ${status.output_row_count.toLocaleString()} rows` : ''}
@@ -155,10 +157,10 @@ export default function PipelineManager() {
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#f1f5f9', borderRadius: 10, padding: 4 }}>
           {([
-            { key: 'overview' as const, label: 'Overview', icon: PieChart },
-            { key: 'datasets' as const, label: 'Datasets', icon: FolderOpen },
-            { key: 'data' as const, label: 'Data Explorer', icon: Layers },
-            { key: 'pipeline' as const, label: 'Pipeline Steps', icon: BarChart3 },
+            { key: 'overview' as const, label: t('pipeline.tab.overview'), icon: PieChart },
+            { key: 'datasets' as const, label: t('pipeline.tab.datasets'), icon: FolderOpen },
+            { key: 'data' as const, label: t('pipeline.tab.data'), icon: Layers },
+            { key: 'pipeline' as const, label: t('pipeline.tab.steps'), icon: BarChart3 },
           ]).map(tab => {
             const Icon = tab.icon
             return (
@@ -180,7 +182,7 @@ export default function PipelineManager() {
         {activeTab === 'overview' && summary?.exists && (
           <div className="animate-fadein">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-              <StatCard label="Total Rows" value={summary.total_rows.toLocaleString()} color="#3b82f6" icon={Database} />
+              <StatCard label={t('pipeline.totalRows')} value={summary.total_rows.toLocaleString()} color="#3b82f6" icon={Database} />
               <StatCard label="課題リスト" value={(summary.categories?.find(c => c.name === '課題リスト')?.count ?? 0).toLocaleString()} color="#8b5cf6" icon={Layers} />
               <StatCard label="ウェイト別課題" value={(summary.categories?.find(c => c.name === 'ウェイト別課題')?.count ?? 0).toLocaleString()} color="#06b6d4" icon={BarChart3} />
               <StatCard label="予算" value={(summary.categories?.find(c => c.name === '予算')?.count ?? 0).toLocaleString()} color="#10b981" icon={TrendingUp} />
@@ -188,7 +190,7 @@ export default function PipelineManager() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
               <div className="card">
                 <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <TrendingUp style={{ width: 16, height: 16, color: '#3b82f6' }} /> Monthly Revenue
+                  <TrendingUp style={{ width: 16, height: 16, color: '#3b82f6' }} /> {t('pipeline.monthlyRevenue')}
                 </div>
                 <div className="card-body"><BarChartSimple data={(summary.monthly || []).filter(m => m.revenue > 0).slice(0, 12)} /></div>
               </div>
@@ -214,7 +216,7 @@ export default function PipelineManager() {
         {activeTab === 'overview' && !summary?.exists && (
           <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
             <Database style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }} />
-            <p style={{ fontSize: 15, fontWeight: 600 }}>No pipeline data yet</p>
+            <p style={{ fontSize: 15, fontWeight: 600 }}>{t('pipeline.noData')}</p>
           </div>
         )}
 
@@ -223,13 +225,13 @@ export default function PipelineManager() {
           <div className="animate-fadein" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FileSpreadsheet style={{ width: 16, height: 16, color: '#3b82f6' }} /> Input Datasets ({datasets?.inputs.length ?? 0})
+                <FileSpreadsheet style={{ width: 16, height: 16, color: '#3b82f6' }} /> {t('pipeline.inputDatasets')} ({datasets?.inputs.length ?? 0})
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {syncMsg && <span style={{ fontSize: 11, color: syncing ? '#3b82f6' : '#10b981', fontWeight: 600 }}>{syncMsg}</span>}
                   <button onClick={syncFromDomo} disabled={syncing} className="btn btn-outline"
                     style={{ padding: '4px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
                     {syncing ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : <CloudDownload style={{ width: 14, height: 14 }} />}
-                    {syncing ? 'Syncing...' : 'Sync DOMO'}
+                    {syncing ? t('pipeline.syncing') : t('pipeline.syncDomo')}
                   </button>
                 </div>
               </div>
@@ -247,7 +249,7 @@ export default function PipelineManager() {
             </div>
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <HardDrive style={{ width: 16, height: 16, color: '#8b5cf6' }} /> Output Datasets ({datasets?.outputs.length ?? 0})
+                <HardDrive style={{ width: 16, height: 16, color: '#8b5cf6' }} /> {t('pipeline.outputDatasets')} ({datasets?.outputs.length ?? 0})
               </div>
               <div className="card-body" style={{ padding: 0 }}>
                 {datasets?.outputs.map((d, i) => (
@@ -269,7 +271,7 @@ export default function PipelineManager() {
                         {d.cards?.length ? ` · ${d.cards.length} cards` : ''}
                       </div>
                     </div>
-                    {d.name.endsWith('.duckdb') && <span style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>View Detail →</span>}
+                    {d.name.endsWith('.duckdb') && <span style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>{t('pipeline.viewDetail')}</span>}
                   </div>
                 ))}
               </div>
@@ -284,13 +286,13 @@ export default function PipelineManager() {
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
-                <input type="text" placeholder="Search 課題タイトル..." value={search}
+                <input type="text" placeholder={t('pipeline.search')} value={search}
                   onChange={e => { setSearch(e.target.value); setPage(1) }}
                   style={{ width: '100%', padding: '9px 12px 9px 36px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none' }} />
               </div>
               <select value={category} onChange={e => { setCategory(e.target.value); setPage(1) }}
                 style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, minWidth: 160, cursor: 'pointer' }}>
-                <option value="">All categories</option>
+                <option value="">{t('pipeline.allCategories')}</option>
                 <option value="課題リスト">課題リスト</option>
                 <option value="ウェイト別課題">ウェイト別課題</option>
                 <option value="予算">予算</option>
@@ -310,7 +312,7 @@ export default function PipelineManager() {
                         ))}
                       </tbody>
                     </table>
-                  ) : <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</div>}
+                  ) : <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>{t('pipeline.noData')}</div>}
               </div>
               {tableData && tableData.total_rows > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid #f1f5f9', fontSize: 13 }}>
@@ -333,7 +335,7 @@ export default function PipelineManager() {
 }
 
 function BarChartSimple({ data }: { data: { year: number; month: number; revenue: number }[] }) {
-  if (!data.length) return <div style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No revenue data</div>
+  if (!data.length) return <div style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>—</div>
   const max = Math.max(...data.map(d => d.revenue))
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140 }}>
