@@ -89,9 +89,6 @@ export default function EmbedCard() {
           }}>D</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{title}</div>
-            <div style={{ fontSize: 11, color: '#94a3b8' }}>
-              Dataflow {dfId} · {cardData?.chart_type || 'pivot_table'}
-            </div>
           </div>
         </div>
         <div style={{
