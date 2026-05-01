@@ -85,7 +85,6 @@ export default function PipelineManager() {
     try { await apiPost('/api/pipeline/run', { dataflow_id: dfId, reference_date: refDate || null }); fetchStatus() } catch { /* */ }
   }
 
-  const currentDf = dataflows.find(d => d.id === dfId)
   const StatusIcon = STATUS_ICONS[status.status] || Clock
   const sc = STATUS_COLORS[status.status] || STATUS_COLORS.idle
 
