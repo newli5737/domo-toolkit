@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Play, RefreshCw, CheckCircle2, XCircle, Clock, Database,
   ChevronLeft, ChevronRight, Search,
@@ -7,7 +8,6 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
 import PipelineSteps from './pipeline/PipelineSteps'
-import DatasetDetail from './pipeline/DatasetDetail'
 
 // ── Types ──
 interface ModelStep { name: string; duration_ms: number; row_count: number | null; error: string | null }
@@ -36,6 +36,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }
 const STATUS_ICONS: Record<string, typeof CheckCircle2> = { idle: Clock, running: RefreshCw, success: CheckCircle2, failed: XCircle }
 
 export default function PipelineManager() {
+  const navigate = useNavigate()
   const [dataflows, setDataflows] = useState<DataflowItem[]>([])
   const [dfId, setDfId] = useState('215')
   const [status, setStatus] = useState<PipelineStatus>({ status: 'idle' })
@@ -48,7 +49,7 @@ export default function PipelineManager() {
   const [activeTab, setActiveTab] = useState<'overview' | 'datasets' | 'data' | 'pipeline'>('overview')
   const [loading, setLoading] = useState(false)
   const [datasets, setDatasets] = useState<DatasetsResponse | null>(null)
-  const [showDetail, setShowDetail] = useState(false)
+
 
   // Fetch dataflow list
   useEffect(() => { apiGet<DataflowItem[]>('/api/pipeline/list').then(setDataflows).catch(() => {}) }, [])
@@ -76,10 +77,10 @@ export default function PipelineManager() {
   }, [status.status])
   useEffect(() => { if (activeTab === 'data') fetchData() }, [activeTab, page, category, search])
   useEffect(() => {
-    if (activeTab === 'datasets' && !showDetail) {
+    if (activeTab === 'datasets') {
       apiGet<DatasetsResponse>(`/api/pipeline/datasets?dataflow_id=${dfId}`).then(setDatasets).catch(() => {})
     }
-  }, [activeTab, dfId, showDetail])
+  }, [activeTab, dfId])
 
   const runPipeline = async () => {
     try { await apiPost('/api/pipeline/run', { dataflow_id: dfId, reference_date: refDate || null }); fetchStatus() } catch { /* */ }
@@ -87,6 +88,8 @@ export default function PipelineManager() {
 
   const StatusIcon = STATUS_ICONS[status.status] || Clock
   const sc = STATUS_COLORS[status.status] || STATUS_COLORS.idle
+
+  const switchDf = (id: string) => { setDfId(id); setDatasets(null); setSummary(null) }
 
   return (
     <div className="animate-fadein">
@@ -99,7 +102,7 @@ export default function PipelineManager() {
               <h1 style={{ margin: 0, fontSize: 20 }}>Pipeline Manager</h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <ChevronDown style={{ width: 14, height: 14, color: '#64748b' }} />
-                <select value={dfId} onChange={e => { setDfId(e.target.value); setDatasets(null); setSummary(null); setShowDetail(false) }}
+                <select value={dfId} onChange={e => switchDf(e.target.value)}
                   style={{ fontSize: 13, color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                   {dataflows.map(d => <option key={d.id} value={d.id}>Dataflow {d.id} — {d.name}</option>)}
                   {dataflows.length === 0 && <option value="215">Dataflow 215</option>}
@@ -143,7 +146,7 @@ export default function PipelineManager() {
           ]).map(tab => {
             const Icon = tab.icon
             return (
-              <button key={tab.key} onClick={() => { setActiveTab(tab.key); setShowDetail(false) }}
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 style={{
                   flex: 1, padding: '10px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -200,7 +203,7 @@ export default function PipelineManager() {
         )}
 
         {/* Datasets */}
-        {activeTab === 'datasets' && !showDetail && (
+        {activeTab === 'datasets' && (
           <div className="animate-fadein" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -224,7 +227,7 @@ export default function PipelineManager() {
               </div>
               <div className="card-body" style={{ padding: 0 }}>
                 {datasets?.outputs.map((d, i) => (
-                  <div key={i} onClick={() => d.name.endsWith('.duckdb') && setShowDetail(true)}
+                  <div key={i} onClick={() => d.name.endsWith('.duckdb') && navigate(`/datasets/${dfId}`)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid #f1f5f9',
                       cursor: d.name.endsWith('.duckdb') ? 'pointer' : 'default',
@@ -249,7 +252,7 @@ export default function PipelineManager() {
             </div>
           </div>
         )}
-        {activeTab === 'datasets' && showDetail && <DatasetDetail dataflowId={dfId} onBack={() => setShowDetail(false)} />}
+
 
         {/* Data Explorer */}
         {activeTab === 'data' && (
