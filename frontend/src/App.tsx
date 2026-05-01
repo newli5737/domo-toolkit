@@ -10,6 +10,7 @@ import Alert from './pages/Alert'
 import Settings from './pages/Settings'
 import Guide from './pages/Guide'
 import CardDashboard from './pages/CardDashboard'
+import PipelineManager from './pages/PipelineManager'
 import Login from './pages/Login'
 
 export default function App() {
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/cards" element={<CardDashboard />} />
+              <Route path="/pipeline" element={<PipelineManager />} />
               <Route path="/alert" element={<Alert />} />
               <Route path="/login" element={<Login onLoginSuccess={handleLogin} />} />
             </Routes>

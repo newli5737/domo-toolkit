@@ -1,11 +1,11 @@
-"""Monitor schemas — Request & Response models cho Monitor endpoints."""
+
 
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Any
 
 
-# ─── Request Params ───────────────────────────────────────
+
 
 class HealthCheckParams(BaseModel):
     stale_hours: int = Field(default=24)
@@ -54,7 +54,7 @@ class DataflowCsvParams(BaseModel):
     search: str = ""
 
 
-# ─── Response Models ──────────────────────────────────────
+
 
 class JobStatusResponse(BaseModel):
     status: str

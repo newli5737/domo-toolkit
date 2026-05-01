@@ -1,4 +1,4 @@
-"""BeastModeRepository — Business logic cho BeastMode read-only queries."""
+
 
 import csv
 import io
@@ -28,7 +28,6 @@ def _get_bm_service(db: Session, auth=None) -> BeastModeService:
 
 
 class BeastModeRepository:
-    """Repository cho BeastMode queries (read-only endpoints)."""
 
     def __init__(self, db: Session, auth=None):
         self.db = db
@@ -132,7 +131,6 @@ class BeastModeRepository:
         return output.getvalue().encode("utf-8-sig")
 
     def create_crawl_job(self, job_type: str, message: str, total_steps: int) -> int:
-        """Tạo crawl job record, trả về job_id."""
         job = CrawlJob(
             job_type='beastmode_full',
             status='pending',
@@ -147,7 +145,6 @@ class BeastModeRepository:
         return job.id
 
     def cancel_stale_jobs(self):
-        """Hủy các job bị kẹt do restart server."""
         try:
             stale_jobs = self.db.query(CrawlJob).filter(CrawlJob.status.in_(['running', 'pending'])).all()
             for job in stale_jobs:
@@ -161,7 +158,6 @@ class BeastModeRepository:
     def update_job_status(self, job_id: int, status: str, message: str = None, 
                           started_at: datetime = None, finished_at: datetime = None,
                           total_steps: int = None, current_step: int = None, found: int = None):
-        """Cập nhật trạng thái job."""
         job = self.db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
         if not job:
             return
@@ -177,12 +173,10 @@ class BeastModeRepository:
         self.db.commit()
 
     def truncate_tables(self, tables: list[str]):
-        """Xóa trắng dữ liệu các bảng trước khi crawl mới."""
         for tbl in tables:
             self.db.execute(text(f"DELETE FROM {tbl}"))
         self.db.commit()
 
     def get_missing_expression_bm_ids(self) -> list[int]:
-        """Lấy danh sách ID các BM bị thiếu expression cấu trúc."""
         rows = self.db.execute(text("SELECT id FROM beastmodes WHERE expression IS NULL OR expression = ''")).mappings().all()
         return [int(r["id"]) for r in rows]

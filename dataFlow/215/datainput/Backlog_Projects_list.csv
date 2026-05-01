@@ -1,0 +1,4 @@
+id,projectKey,name,chartEnabled,useResolvedForChart,subtaskingEnabled,projectLeaderCanEditProjectLeader,useWiki,useFileSharing,useWikiTreeView,useSubversion,useGit,useOriginalImageSizeAtWiki,textFormattingRule,archived,displayOrder,useDevAttributes,_BATCH_ID_,_BATCH_LAST_RUN_
+1073851282,PTJ_WEB,PTJ加盟店サイト関連,true,true,true,false,true,true,true,false,true,false,backlog,false,27,true,5.0,2025-02-27 10:13:46
+1073922075,GP,現場ポケット,true,false,true,false,true,true,true,true,true,false,markdown,false,0,true,5.0,2025-02-27 10:13:46
+1073977355,GPOP,現場ポケット運用(GPOP),true,false,true,false,true,true,true,false,false,false,backlog,false,2147483646,true,5.0,2025-02-27 10:13:46

@@ -1,4 +1,4 @@
-"""CardRepository — Toàn bộ business logic truy vấn Card từ DB."""
+
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, nullslast
@@ -13,12 +13,11 @@ from app.schemas.common import PaginatedResponse
 
 
 class CardRepository:
-    """Repository chuyên xử lý query Card. Router không cần biết SQL."""
 
     def __init__(self, db: Session):
         self.db = db
 
-    # ─── Helpers ──────────────────────────────────────────────────
+
 
     @staticmethod
     def _paginate(total: int, page: int, page_size: int) -> int:
@@ -36,7 +35,7 @@ class CardRepository:
             return query.order_by(nullslast(sort_col.asc()))
         return query.order_by(nullslast(sort_col.desc()))
 
-    # ─── Card List ────────────────────────────────────────────────
+
 
     def get_paginated_cards(self, params: CardFilterParams) -> PaginatedResponse[CardResponse]:
         query = self.db.query(Card)
@@ -69,7 +68,7 @@ class CardRepository:
             total_pages=self._paginate(total, params.page, params.page_size),
         )
 
-    # ─── Card Types ───────────────────────────────────────────────
+
 
     def get_card_types(self) -> list[str]:
         rows = self.db.query(Card.card_type).filter(
@@ -77,7 +76,7 @@ class CardRepository:
         ).distinct().order_by(Card.card_type).all()
         return [r[0] for r in rows]
 
-    # ─── Dashboards ──────────────────────────────────────────────
+
 
     def get_paginated_dashboards(self, params: DashboardFilterParams) -> PaginatedResponse[DashboardResponse]:
         base_filter = [
@@ -123,7 +122,7 @@ class CardRepository:
             total_pages=self._paginate(total, params.page, params.page_size),
         )
 
-    # ─── Stats ────────────────────────────────────────────────────
+
 
     def get_stats(self) -> CardStatsResponse:
         stats = self.db.query(
@@ -171,7 +170,7 @@ class CardRepository:
             ],
         )
 
-    # ─── Low Usage ────────────────────────────────────────────────
+
 
     def get_low_usage(self, params: LowUsageFilterParams) -> LowUsageResponse:
         base_filter = [(Card.view_count <= params.max_views) | (Card.view_count.is_(None))]

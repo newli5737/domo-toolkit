@@ -108,18 +108,15 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType>({
   lang: 'vi',
-  setLang: () => {},
+  setLang: () => { },
   t: (key: string) => key,
 })
 
-/** Resolve initial language: URL param `?lang=ja` > localStorage > default 'vi' */
 function getInitialLang(): Lang {
-  // Check URL param
   const urlParams = new URLSearchParams(window.location.search)
   const urlLang = urlParams.get('lang')
   if (urlLang === 'ja' || urlLang === 'vi') return urlLang
 
-  // Check localStorage
   const saved = localStorage.getItem('domo-lang')
   return (saved === 'ja' ? 'ja' : 'vi') as Lang
 }
@@ -127,7 +124,6 @@ function getInitialLang(): Lang {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(getInitialLang)
 
-  // Sync URL param changes (e.g. user edits URL manually)
   useEffect(() => {
     const handlePopState = () => {
       const urlParams = new URLSearchParams(window.location.search)
@@ -144,7 +140,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const changeLang = (newLang: Lang) => {
     setLang(newLang)
     localStorage.setItem('domo-lang', newLang)
-    // Update URL param without page reload
     const url = new URL(window.location.href)
     url.searchParams.set('lang', newLang)
     window.history.replaceState({}, '', url.toString())

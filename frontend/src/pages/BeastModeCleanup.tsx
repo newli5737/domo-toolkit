@@ -17,33 +17,33 @@ interface Props {
 export default function BeastModeCleanup({ readOnly = false }: Props) {
   const { lang } = useI18n()
   const GROUP_CONFIG = lang === 'ja' ? GROUP_CONFIG_JA : GROUP_CONFIG_VI
-  
+
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = Number(searchParams.get('tab') || 1)
   const setActiveTab = (tab: number) => setSearchParams({ tab: String(tab) }, { replace: true })
-  
+
   const [groupData, setGroupData] = useState<BmRow[]>([])
   const [loadingGroup, setLoadingGroup] = useState(false)
   const [crawling, setCrawling] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Search state
+  // Search
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<BmRow[] | null>(null)
   const [searching, setSearching] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Delete state
+  // Delete
   const [deleteTarget, setDeleteTarget] = useState<BmRow | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const [lowViewThreshold, setLowViewThreshold] = useState(10)
 
-  // WebSocket connection
+  // WebSocket
   const connectWs = useCallback((retryCount = 0) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -85,7 +85,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
     }
   }, [connectWs])
 
-  // Load group data khi đổi tab (chỉ khi không search)
+  // Load group
   useEffect(() => {
     if (!searchQuery) {
       loadGroupData(activeTab)
@@ -302,11 +302,11 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           )}
         </div>
 
-        {/* CRAWL PROGRESS PANEL */}
+        {/* Progress */}
         {crawling && crawlProgress && (
-          <ProgressPanel 
-            crawlProgress={crawlProgress} 
-            cancelCrawl={cancelCrawl} 
+          <ProgressPanel
+            crawlProgress={crawlProgress}
+            cancelCrawl={cancelCrawl}
           />
         )}
 
@@ -317,7 +317,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           </div>
         )}
 
-        {/* No data yet */}
+        {/* Empty */}
         {!summary && !crawling && (
           <div className="text-center py-20">
             <div className="text-6xl mb-5">🔮</div>
@@ -333,12 +333,12 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
         {/* Results */}
         {summary && (
           <>
-            <StatSummary 
-              summary={summary} 
-              setActiveTab={setActiveTab} 
+            <StatSummary
+              summary={summary}
+              setActiveTab={setActiveTab}
             />
 
-            <BeastModeTable 
+            <BeastModeTable
               groupData={groupData}
               searchResults={searchResults}
               loadingGroup={loadingGroup}
@@ -351,7 +351,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
               setDeleteTarget={setDeleteTarget}
             />
 
-            {/* Top dirty datasets */}
+            {/* Dirty datasets */}
             {summary.top_dirty_datasets.length > 0 && (
               <div>
                 <h3 className="text-lg font-bold mb-4">{lang === 'ja' ? '🏭 クリーンアップ対象DataSet' : '🏭 Dataset cần dọn dẹp nhất'}</h3>
@@ -390,7 +390,7 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
           </>
         )}
 
-        {/* Delete Confirmation Modal */}
+        {/* Delete Modal */}
         {deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
@@ -420,11 +420,10 @@ export default function BeastModeCleanup({ readOnly = false }: Props) {
               </div>
 
               {deleteResult && (
-                <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${
-                  deleteResult.success
+                <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${deleteResult.success
                     ? 'bg-[var(--color-accent-green)]/10 text-[var(--color-accent-green)]'
                     : 'bg-[var(--color-accent-red)]/10 text-[var(--color-accent-red)]'
-                }`}>
+                  }`}>
                   {deleteResult.success ? '✅' : '❌'} {deleteResult.message}
                 </div>
               )}

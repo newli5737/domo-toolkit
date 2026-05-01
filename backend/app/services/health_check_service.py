@@ -35,7 +35,7 @@ class HealthCheckService:
             "min_dataflow_count": min_dataflow_count,
         }
 
-        # ─── Phase 1: Crawl & save datasets ──────────────────
+        # Phase 1: Datasets
         log.info("Phase 1: Crawl datasets...")
         raw_datasets = self.dataset_service.crawl_all_datasets()
 
@@ -99,12 +99,11 @@ class HealthCheckService:
             st = search_ds.get("last_execution_state", "")
             exec_states[st] = exec_states.get(st, 0) + 1
 
-        log.info(f"  [DEBUG] last_execution_state distribution: {exec_states}")
 
         self.dataset_service.save_datasets(final_datasets)
         dataset_details = final_datasets
 
-        # ─── Phase 2: Crawl & save dataflows ──────────────────
+        # Phase 2: Dataflows
         log.info("Phase 2: Crawl dataflows...")
         raw_dataflows = self.dataflow_service.crawl_all_dataflows()
 
@@ -131,7 +130,7 @@ class HealthCheckService:
         self.dataflow_service.save_dataflows(dataflow_details)
         self.dataflow_service.propagate_dataflow_status_to_datasets(dataflow_details)
 
-        # ─── Phase 3: Phân tích kết quả ──────────────────────
+        # Phase 3: Analysis
         log.info("Phase 3: Phân tích...")
 
         ds_alerts = []

@@ -1,6 +1,7 @@
-"""AuthRepository — Business logic cho Authentication."""
+
 
 import json
+import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -8,6 +9,8 @@ from app.core.auth import DomoAuth
 from app.config import get_settings
 from app.schemas.auth import LoginResponse, AuthStatusResponse, LogoutResponse
 from app.models.auth import DomoSession
+
+log = logging.getLogger(__name__)
 
 # Singleton auth instance
 _auth: DomoAuth | None = None
@@ -32,7 +35,6 @@ def get_auth(db: Session = None) -> DomoAuth:
 
 
 class AuthRepository:
-    """Xử lý logic đăng nhập, session, và trạng thái auth."""
 
     def __init__(self, db: Session):
         self.db = db
@@ -40,7 +42,6 @@ class AuthRepository:
         self.settings = get_settings()
 
     def _save_session(self):
-        """Lưu session vào DB sau khi login thành công."""
         try:
             self.db.execute(text("UPDATE domo_sessions SET is_active = FALSE WHERE is_active = TRUE"))
             
@@ -58,7 +59,7 @@ class AuthRepository:
             self.db.commit()
         except Exception as e:
             self.db.rollback()
-            print(f"Lỗi lưu session: {e}")
+            log.error(f"Lỗi lưu session: {e}")
 
     def login(self, username: str, password: str) -> LoginResponse:
         username = username or self.settings.domo_username

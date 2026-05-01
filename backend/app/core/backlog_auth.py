@@ -1,13 +1,4 @@
-"""BacklogAuth — Đăng nhập Backlog bằng HTTP requests thuần (không Playwright).
 
-Flow:
-  1. GET https://apps.nulab.com/signin  → lấy JSESSIONID + device_key cookies
-  2. Parse _csrf token từ HTML
-  3. POST /signin/account/auth-type     → kiểm tra loại tài khoản
-  4. POST /signin                       → đăng nhập với email + password
-
-Session cookie cuối cùng được lưu để gọi Backlog API.
-"""
 
 import re
 import logging
@@ -20,7 +11,6 @@ NULAB_BASE = "https://apps.nulab.com"
 
 
 class BacklogAuth:
-    """Quản lý session đăng nhập Backlog qua Nulab SSO."""
 
     def __init__(self, backlog_base_url: str = "https://mothers-sp.backlog.jp", device_key: str = ""):
         self.backlog_base_url = backlog_base_url
@@ -36,12 +26,11 @@ class BacklogAuth:
         # Inject device_key ngay từ đầu — Nulab dùng nó để nhận ra thiết bị tin cậy, bỏ qua captcha
         if device_key:
             self._session.cookies.set("device_key", device_key, domain="apps.nulab.com")
-            print(f"[BACKLOG DEBUG] Injected device_key: {device_key[:20]}...")
         self._csrf_token: str = ""
         self._logged_in_at: datetime | None = None
         self._cookies: dict = {}
 
-    # ── Public properties ──────────────────────────────────────
+
 
     @property
     def is_valid(self) -> bool:
@@ -52,32 +41,27 @@ class BacklogAuth:
 
     @property
     def cookie_header(self) -> str:
-        """Cookie string để đặt vào header 'Cookie'."""
         return "; ".join(f"{k}={v}" for k, v in self._cookies.items())
 
     @property
     def csrf_token(self) -> str:
         return self._csrf_token
 
-    # ── Login flow ────────────────────────────────────────────
+
 
     def login(self, email: str, password: str) -> dict:
-        """
-        Đăng nhập Backlog qua Nulab SSO.
-        Trả về {"success": bool, "message": str}
-        """
         try:
-            # ── Bước 1: GET trang signin → nhận cookies + CSRF ──
+            # Bước 1: GET trang signin → nhận cookies + CSRF
             csrf = self._get_csrf_and_cookies()
             if not csrf:
                 return {"success": False, "message": "Không lấy được _csrf token từ trang signin"}
 
-            # ── Bước 2: Kiểm tra loại tài khoản ──
+            # Bước 2: Kiểm tra loại tài khoản
             auth_type_ok = self._check_auth_type(email, csrf)
             if not auth_type_ok:
                 log.warning("[BACKLOG] auth-type check không thành công, tiếp tục thử login...")
 
-            # ── Bước 3: POST signin ──
+            # Bước 3: POST signin
             result = self._post_signin(email, password, csrf)
             return result
 
@@ -90,7 +74,6 @@ class BacklogAuth:
             return {"success": False, "message": f"Lỗi: {str(e)}"}
 
     def _get_csrf_and_cookies(self) -> str:
-        """GET trang signin, lấy JSESSIONID và _csrf từ HTML."""
         resp = self._session.get(
             f"{NULAB_BASE}/signin",
             headers={
@@ -102,8 +85,6 @@ class BacklogAuth:
             timeout=30,
             allow_redirects=True,
         )
-        print(f"[BACKLOG DEBUG] GET /signin → status={resp.status_code}, url={resp.url}")
-        print(f"[BACKLOG DEBUG] Cookies nhận được: {list(resp.cookies.keys())}")
         log.info(f"[BACKLOG] GET /signin → {resp.status_code}")
 
         # Parse _csrf từ HTML (hidden input hoặc meta)
@@ -116,11 +97,10 @@ class BacklogAuth:
         if not csrf:
             csrf = resp.headers.get("x-csrf-token", "")
 
-        print(f"[BACKLOG DEBUG] _csrf tìm được: '{csrf[:40] if csrf else '(trống)'}'")
+
         return csrf
 
     def _extract_csrf(self, html: str) -> str:
-        """Parse _csrf từ HTML — thử nhiều pattern."""
         patterns = [
             r'<input[^>]+name=["\']_csrf["\'][^>]+value=["\']([^"\']+)["\']',
             r'<input[^>]+value=["\']([^"\']+)["\'][^>]+name=["\']_csrf["\']',
@@ -134,7 +114,6 @@ class BacklogAuth:
         return ""
 
     def _check_auth_type(self, email: str, csrf: str) -> bool:
-        """POST /signin/account/auth-type — xác định loại tài khoản."""
         try:
             resp = self._session.post(
                 f"{NULAB_BASE}/signin/account/auth-type",
@@ -159,7 +138,6 @@ class BacklogAuth:
             return False
 
     def _post_signin(self, email: str, password: str, csrf: str) -> dict:
-        """POST /signin với form data."""
         form = {
             "_csrf": csrf,
             "contact_me": "",
@@ -170,7 +148,7 @@ class BacklogAuth:
             "mixpanelDistinctId": "",
             "mixpanelDeviceId": "",
         }
-        print(f"[BACKLOG DEBUG] POST /signin với email={email}, _csrf='{csrf[:20]}...'")
+
 
         resp = self._session.post(
             f"{NULAB_BASE}/signin",
@@ -191,8 +169,6 @@ class BacklogAuth:
             allow_redirects=True,
         )
 
-        print(f"[BACKLOG DEBUG] POST /signin → status={resp.status_code}, final_url={resp.url}")
-        print(f"[BACKLOG DEBUG] Session cookies sau login: {list(self._session.cookies.keys())}")
         log.info(f"[BACKLOG] POST /signin → {resp.status_code}, final_url={resp.url}")
 
         # Kiểm tra kết quả
@@ -200,17 +176,13 @@ class BacklogAuth:
         if "signin" in final_url and resp.status_code < 400:
             # Vẫn ở trang signin → login thất bại (sai pass hoặc bị captcha)
             error_msg = self._extract_error(resp.text)
-            print(f"[BACKLOG DEBUG] ❌ Vẫn ở trang signin → THẤT BẠI")
-            print(f"[BACKLOG DEBUG] Error từ HTML: {error_msg or '(không tìm thấy)'} ")
-            print(f"[BACKLOG DEBUG] HTML excerpt (2000 ký tự đầu):\n{resp.text[:2000]}")
+            log.info(f"[BACKLOG] Login failed: URL={final_url}")
             return {
                 "success": False,
                 "message": f"Login thất bại: {error_msg or 'Sai email/password hoặc bị captcha'}",
             }
 
         if resp.status_code >= 400:
-            print(f"[BACKLOG DEBUG] ❌ HTTP error {resp.status_code}")
-            print(f"[BACKLOG DEBUG] Response: {resp.text[:500]}")
             return {
                 "success": False,
                 "message": f"HTTP {resp.status_code}: {resp.text[:200]}",
@@ -225,22 +197,19 @@ class BacklogAuth:
         if not self._csrf_token:
             self._csrf_token = self._fetch_backlog_csrf()
 
-        print(f"[BACKLOG DEBUG] ✅ Login thành công! Cookies: {list(self._cookies.keys())}")
-        log.info(f"[BACKLOG] ✅ Login thành công! Cookies: {list(self._cookies.keys())}")
+        log.info(f"[BACKLOG] Login success: cookies={list(self._cookies.keys())}")
         return {
             "success": True,
             "message": f"Đăng nhập Backlog thành công! ({len(self._cookies)} cookies)",
         }
 
     def _extract_error(self, html: str) -> str:
-        """Trích lỗi từ HTML trang signin."""
         m = re.search(r'<[^>]+class=["\'][^"\']*error[^"\']*["\'][^>]*>([^<]{5,})<', html, re.IGNORECASE)
         if m:
             return m.group(1).strip()
         return ""
 
     def _fetch_backlog_csrf(self) -> str:
-        """Lấy CSRF token từ trang Backlog sau khi đã login."""
         try:
             resp = self._session.get(
                 self.backlog_base_url,
@@ -261,10 +230,9 @@ class BacklogAuth:
             log.warning(f"[BACKLOG] Không lấy được CSRF từ Backlog: {e}")
             return ""
 
-    # ── Session persistence ───────────────────────────────────
+
 
     def load_from_dict(self, data: dict):
-        """Khôi phục session từ dict đã lưu."""
         self._cookies = data.get("cookies", {})
         self._csrf_token = data.get("csrf_token", "")
         logged_at = data.get("logged_in_at")
@@ -274,7 +242,6 @@ class BacklogAuth:
             self._session.cookies.set(k, v)
 
     def to_dict(self) -> dict:
-        """Export session để lưu DB."""
         logged_at = self._logged_in_at.isoformat() if self._logged_in_at is not None else None
         return {
             "cookies": self._cookies,

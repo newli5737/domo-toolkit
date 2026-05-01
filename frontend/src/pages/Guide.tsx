@@ -16,7 +16,7 @@ export default function Guide() {
 
       <div className="page-body space-y-6 animate-fadein">
 
-        {/* Intro */}
+
         <div className="card">
           <div className="card-header">{lang === 'vi' ? '📖 Công cụ này làm gì?' : '📖 このツールについて'}</div>
           <div className="card-body">
@@ -43,7 +43,7 @@ export default function Guide() {
           </div>
         </div>
 
-        {/* Monitor */}
+
         <div className="card">
           <div className="card-header">🔍 {lang === 'vi' ? 'Monitor — Giám sát DataSet' : 'Monitor — DataSet監視'}</div>
           <div className="card-body text-sm text-slate-600 space-y-3">
@@ -55,7 +55,7 @@ export default function Guide() {
               <p><span className="font-semibold text-slate-700">4.</span> {lang === 'vi' ? 'Bấm icon 🔗 → mở trực tiếp trên Domo để kiểm tra chi tiết' : '🔗アイコン → Domoで直接確認'}</p>
             </div>
 
-            {/* Status table */}
+
             <table className="w-full text-xs mt-2">
               <thead>
                 <tr className="border-b border-slate-200">
@@ -81,7 +81,7 @@ export default function Guide() {
           </div>
         </div>
 
-        {/* Alert */}
+
         <div className="card">
           <div className="card-header">🚨 {lang === 'vi' ? 'Alert — Cảnh báo' : 'Alert — アラート'}</div>
           <div className="card-body text-sm text-slate-600">
@@ -91,7 +91,7 @@ export default function Guide() {
           </div>
         </div>
 
-        {/* Settings */}
+
         <div className="card">
           <div className="card-header">⚙️ {lang === 'vi' ? 'Settings — Cài đặt' : 'Settings — 設定'}</div>
           <div className="card-body text-sm text-slate-600 space-y-4">

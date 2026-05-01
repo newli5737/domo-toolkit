@@ -32,5 +32,19 @@ log.txt
 *.log
 *.sqlite3
 
-# Cookie / session files — nhạy cảm, KHÔNG commit
+# Cookie / session files
 backend/*.json
+
+# Large / generated files — do NOT commit
+*.har
+*.com
+*.duckdb
+dataFlow/*/dataoutput/
+dataFlow/*/dataoutput_mau/
+dataflow_*.json
+
+# Scratch / test scripts
+backend/exact_diff.py
+backend/compare.py
+backend/check_cols.py
+backend/test_load.py

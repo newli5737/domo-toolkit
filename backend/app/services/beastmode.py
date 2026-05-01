@@ -1,4 +1,4 @@
-"""BeastModeService — Crawl, fetch chi tiết, và phân tích Beast Mode."""
+
 
 import re
 import json
@@ -16,7 +16,6 @@ log = DomoLogger("beastmode")
 
 
 class BeastModeService:
-    """Xử lý toàn bộ logic liên quan đến Beast Mode."""
 
     SEARCH_URL = "/api/query/v1/functions/search"
     DETAIL_URL = "/api/query/v1/functions/template"
@@ -28,18 +27,15 @@ class BeastModeService:
         self.api = api
         self.db = db
 
-    # ─── Crawl tất cả BM ─────────────────────────────────────
+    # Crawl
 
     def crawl_all(self, job_id: int = None, progress_callback=None,
                    on_batch_callback=None) -> list[dict]:
-        """Crawl toàn bộ Beast Mode qua search API.
-        on_batch_callback(bm_ids): gọi sau mỗi batch để pipeline xử lý ngay.
-        """
         all_bms = []
         offset = 0
         batch_size = 1000
 
-        log.info(f"Bắt đầu crawl BM (batch_size={batch_size})")
+        log.info(f"Crawl BM (batch={batch_size})")
 
         while True:
             payload = {
@@ -127,20 +123,19 @@ class BeastModeService:
                 break
             offset += batch_size
 
-        log.info(f"Crawl BM xong: tổng {len(all_bms)} BM")
+        log.info(f"Crawl BM done: {len(all_bms)}")
         return all_bms
 
-    # ─── Fetch chi tiết (async) ───────────────────────────────
+    # Fetch details
 
     async def fetch_details_batch(self, bm_ids: list[int], job_id: int = None,
                                    concurrency: int = 50, progress_callback=None):
-        """Fetch chi tiết từng BM bằng async. Retry failed IDs."""
         total = len(bm_ids)
         all_processed = 0
         dep_rows = []
         update_rows = []
 
-        log.info(f"Bắt đầu fetch details cho {total} BM (concurrency={concurrency})")
+        log.info(f"Fetch details for {total} BM")
 
         async with self.api.create_async_session() as session:
 
@@ -234,15 +229,11 @@ class BeastModeService:
             if failed_ids:
                 log.error(f"❌ {len(failed_ids)} BM vẫn thất bại sau retry: {failed_ids[:20]}...")
 
-        log.info(f"Fetch details xong: {all_processed}/{total} (failed: {len(failed_ids)})")
+        log.info(f"Fetch details done: {all_processed}/{total}")
 
-    # ─── Fetch User Names ─────────────────────────────────────
+    # Users
 
     def fetch_user_names(self, user_ids: list[int]) -> dict:
-        """Batch-fetch user display names từ Domo API.
-        GET /api/content/v3/users?id=123&id=456
-        Returns: {user_id: display_name, ...}
-        """
         result = {}
         if not user_ids:
             return result
@@ -277,11 +268,10 @@ class BeastModeService:
 
         return result
 
-    # ─── Phân tích 4 nhóm ────────────────────────────────────
+    # Analyze
 
     def analyze(self, low_view_threshold: int = 10) -> dict:
-        """Phân loại tất cả BM thành 4 nhóm."""
-        log.info("Bắt đầu phân tích...")
+        log.info("Analyzing...")
 
         # Lấy tất cả BM
         from app.models.beastmode import BeastMode, BMCardMap, BMDependencyMap, BMAnalysis, BMDeleteLog
@@ -399,17 +389,7 @@ class BeastModeService:
         dup_names = self._find_name_duplicates()
 
         # Log kết quả
-        log.info("=" * 40)
-        log.success(f"📊 KẾT QUẢ PHÂN TÍCH:")
-        log.info(f"  Tổng BM: {len(all_bms)}")
-        for g, cnt in group_counts.items():
-            pct = (cnt / len(all_bms) * 100) if all_bms else 0
-            log.info(f"  Nhóm {g}: {cnt} ({pct:.1f}%)")
-        log.info(f"  Duplicates (exact): {len(dup_exact)} groups")
-        log.info(f"  Duplicates (normalized): {len(dup_normalized)} groups")
-        log.info(f"  Duplicates (structure): {len(dup_structure)} groups")
-        log.info(f"  Duplicate names: {len(dup_names)} groups")
-        log.info("=" * 40)
+        log.success(f"Analyze done. Groups: {group_counts}")
 
         return {
             "total": len(all_bms),
@@ -421,7 +401,6 @@ class BeastModeService:
         }
 
     def get_group_data(self, group_number: int, limit: int = 100, offset: int = 0) -> list[dict]:
-        """Lấy danh sách BM theo nhóm."""
         from sqlalchemy import select
         from app.models.beastmode import BMAnalysis, BeastMode
         stmt = (
@@ -441,7 +420,6 @@ class BeastModeService:
         return out
 
     def search_bm(self, query: str, limit: int = 50) -> list[dict]:
-        """Tìm BM theo tên (ILIKE) hoặc raw ID."""
         query = query.strip()
         if not query:
             return []
@@ -476,7 +454,6 @@ class BeastModeService:
         return out
 
     def get_summary(self) -> dict:
-        """Lấy tổng hợp kết quả phân tích."""
         from app.models.beastmode import BMAnalysis
         from sqlalchemy import select, func
         stmt = (
@@ -505,10 +482,9 @@ class BeastModeService:
             "top_dirty_datasets": dataset_stats[:10],
         }
 
-    # ─── Xóa BM qua Card ──────────────────────────────────────
+    # Management
 
     def get_bm_detail(self, bm_id: int) -> dict | None:
-        """Lấy chi tiết BM template, gồm links (cards) và dependencies."""
         url = f"{self.DETAIL_URL}/{bm_id}?hidden=true"
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:
@@ -517,7 +493,6 @@ class BeastModeService:
         return resp.json()
 
     def _parse_card_ids_from_links(self, links: list) -> list[str]:
-        """Trích card IDs từ links, format dr:CARD_ID:SUB_ID → lấy CARD_ID."""
         card_ids = []
         for link in links:
             resource = link.get("resource", {})
@@ -532,7 +507,6 @@ class BeastModeService:
         return card_ids
 
     def get_card_definition(self, card_id: str) -> dict | None:
-        """Lấy card KPI definition qua PUT."""
         url = "/api/content/v3/cards/kpi/definition"
         payload = {
             "dynamicText": True,
@@ -546,12 +520,6 @@ class BeastModeService:
         return resp.json()
 
     def remove_bm_from_card(self, card_id: str, bm_id: int, bm_name: str, bm_legacy_id: str) -> dict:
-        """
-        Gỡ BM ra khỏi card bằng cách sửa card definition và PUT lại.
-        - Lưu state cũ (card definition) vào DB trước khi xóa
-        - Lọc BM ra khỏi formulas (match bằng id == legacy_id)
-        - Chỉ tính thành công khi PUT trả về 200
-        """
         log.info(f"Đang gỡ BM (legacy={bm_legacy_id}) khỏi card #{card_id}")
 
         card_def = self.get_card_definition(card_id)
@@ -560,7 +528,7 @@ class BeastModeService:
 
         definition = card_def.get("definition", card_def)
 
-        # ─── Lưu state cũ vào DB ─────────────────────────────
+        # Log state
         card_def_json = json.dumps(card_def, ensure_ascii=False)
         from app.models.beastmode import BMDeleteLog
         new_log = BMDeleteLog(
@@ -573,7 +541,6 @@ class BeastModeService:
         log_id = new_log.id
         log.info(f"  💾 Đã lưu card definition cũ (log #{log_id})")
 
-        # ─── Debug: dump card_def ra file ────────────────────
         try:
             with open("debug_card_def.json", "w", encoding="utf-8") as f:
                 json.dump(card_def, f, indent=2, ensure_ascii=False)
@@ -581,7 +548,7 @@ class BeastModeService:
         except Exception as e:
             log.error(f"  ❌ Không thể lưu debug_card_def.json: {e}")
 
-        # ─── Lấy dataSourceId ─────────────────────────────────
+        # Get dataSourceId
         # Thử lấy từ nhiều nguồn trong card definition response
         data_source_id = None
 
@@ -619,7 +586,6 @@ class BeastModeService:
                     data_source_id = cond["dataSourceId"]
                     break
 
-        # 4) Fallback: gọi card info API (tham khảo 1901/get_card_info.py)
         if not data_source_id:
             log.info(f"  🔍 dataSourceId chưa tìm thấy, thử card info API...")
             card_info_resp = self.api.get(
@@ -655,7 +621,7 @@ class BeastModeService:
 
         log.info(f"  📦 dataSourceId={data_source_id}")
 
-        # ─── Lọc BM ra khỏi formulas ─────────────────────────
+        # Filter formulas
         formulas = definition.get("formulas", [])
         original_count = len(formulas)
         filtered_formulas = [f for f in formulas if f.get("id") != bm_legacy_id]
@@ -670,7 +636,7 @@ class BeastModeService:
 
         log.info(f"  Đã lọc {removed_count} formula, còn {len(filtered_formulas)}/{original_count}")
 
-        # ─── Lọc BM ra khỏi subscription ────────────────────
+        # Filter subscriptions
         # BM bị xóa khỏi formulas nhưng nếu vẫn còn trong subscription.columns/orderBy/groupBy
         # → Domo sẽ 500 vì cố query formula không tồn tại
         subscriptions = definition.get("subscriptions", {})
@@ -704,7 +670,7 @@ class BeastModeService:
                 ]
             cleaned_subs[sub_name] = cleaned_sub
 
-        # ─── PUT lại card ─────────────────────────────────────
+        # PUT card
         # Payload gồm: urn + dataProvider + formulas + subscription
         # subscription phải là object trực tiếp (e.g. {"name":"main","columns":[...]})
         # KHÔNG phải {"main": {...}}
@@ -721,7 +687,7 @@ class BeastModeService:
 
         url = "/api/content/v3/cards/kpi/table/query"
 
-        # ─── Headers bắt buộc cho PUT card query ──────────────
+        # Headers
         session_toe = self.api.auth.cookies.get("SESSION_TOE", "")
         extra_headers = {
             "accept": "application/json, text/plain, */*",
@@ -742,7 +708,6 @@ class BeastModeService:
         log.info(f"  🔍 [PUT] payload keys: {list(payload.keys())}")
         log.info(f"  🔍 [PUT] SESSION_TOE={'✅' if session_toe else '❌ MISSING'}")
 
-        # ─── Debug: dump JSON ra file ──────────────────────────
         try:
             with open("debug_card_def.json", "w", encoding="utf-8") as f:
                 json.dump(card_def, f, indent=2, ensure_ascii=False)
@@ -774,7 +739,6 @@ class BeastModeService:
         return {"success": True, "removed": removed_count, "card_id": card_id}
 
     def delete_bm(self, bm_id: int) -> dict:
-        """Xóa BM trực tiếp bằng DELETE request như test_delete.py"""
         log.info(f"=== Bắt đầu xóa trực tiếp BM #{bm_id} ===")
         
         # Get BM Detail first to get the name for logging
@@ -814,7 +778,7 @@ class BeastModeService:
             log.error(f"  ❌ {error_msg}")
             return {"success": False, "bm_id": bm_id, "bm_name": bm_name, "error": error_msg}
 
-    # ─── Helpers ──────────────────────────────────────────────
+    # Helpers
 
     def _normalize_expr(self, expr: str) -> str:
         """Tầng 2: Normalize expression — lowercase, collapse whitespace, remove comments, strip backticks."""

@@ -1,4 +1,4 @@
-"""DomoAPI — HTTP client sync/async với retry và rate limit."""
+
 
 import time
 import asyncio
@@ -8,7 +8,6 @@ from aiohttp import ClientSession, TCPConnector
 
 
 class DomoAPI:
-    """HTTP client cho Domo API — hỗ trợ sync, async, retry, pagination."""
 
     def __init__(self, auth, max_retries: int = 10, retry_delay: float = 5.0):
         self.auth = auth
@@ -20,10 +19,9 @@ class DomoAPI:
     def base_url(self) -> str:
         return self._base_url
 
-    # ─── Sync requests ───────────────────────────────────────
+
 
     def _request(self, method: str, url: str, json=None, params=None, timeout=60, extra_headers=None) -> requests.Response | None:
-        """Request sync với auto-retry khi bị 429."""
         safe_cookies = {
             str(k): str(v) for k, v in self.auth.cookies.items()
             if k is not None and v is not None
@@ -75,15 +73,12 @@ class DomoAPI:
         url = f"{self._base_url}{path}" if path.startswith("/") else path
         return self._request("DELETE", url, timeout=timeout, extra_headers=extra_headers)
 
-    # ─── Pagination helper ────────────────────────────────────
+
 
     def paginate(self, path: str, payload: dict, results_key: str,
                  batch_size: int = 100, offset_key: str = "offset",
                  count_key: str = "count") -> list:
-        """
-        Tự động phân trang cho Domo search APIs.
-        Trả về list tất cả results gộp lại.
-        """
+
         all_results = []
         offset = 0
 
@@ -109,14 +104,12 @@ class DomoAPI:
 
         return all_results
 
-    # ─── Async requests ───────────────────────────────────────
+
 
     _debug_printed = False
 
     async def async_get(self, session: ClientSession, url: str, timeout: int = 20) -> dict | None:
-        """GET async với retry."""
         import json as builtin_json
-        # Force tất cả key/value thành string, loại bỏ None
         safe_cookies = {
             str(k): str(v) for k, v in self.auth.cookies.items()
             if k is not None and v is not None
@@ -126,17 +119,16 @@ class DomoAPI:
             if k is not None and v is not None
         } if self.auth.headers else {}
 
-        # Debug: in 1 lần duy nhất
         if not DomoAPI._debug_printed:
             DomoAPI._debug_printed = True
             print(f"🔍 [DEBUG] cookies keys: {list(self.auth.cookies.keys())}")
             print(f"🔍 [DEBUG] headers keys: {list(self.auth.headers.keys())}")
             none_cookies = [k for k in self.auth.cookies.keys() if k is None]
             none_headers = [k for k in self.auth.headers.keys() if k is None]
-            print(f"🔍 [DEBUG] None cookie keys: {none_cookies}")
-            print(f"🔍 [DEBUG] None header keys: {none_headers}")
-            print(f"🔍 [DEBUG] safe_cookies keys: {list(safe_cookies.keys())}")
-            print(f"🔍 [DEBUG] safe_headers keys: {list(safe_headers.keys())}")
+            # print(f"🔍 [DEBUG] None cookie keys: {none_cookies}")
+            # print(f"🔍 [DEBUG] None header keys: {none_headers}")
+            # print(f"🔍 [DEBUG] safe_cookies keys: {list(safe_cookies.keys())}")
+            # print(f"🔍 [DEBUG] safe_headers keys: {list(safe_headers.keys())}")
 
         for attempt in range(3):
             try:
@@ -166,7 +158,6 @@ class DomoAPI:
         return None
 
     async def async_post(self, session: ClientSession, url: str, json=None, timeout: int = 20) -> dict | None:
-        """POST async với retry."""
         for attempt in range(3):
             try:
                 async with session.post(
@@ -187,6 +178,5 @@ class DomoAPI:
         return None
 
     def create_async_session(self, limit: int = 50) -> ClientSession:
-        """Tạo aiohttp session với connection pool."""
         connector = TCPConnector(limit=limit, limit_per_host=30)
         return ClientSession(connector=connector)

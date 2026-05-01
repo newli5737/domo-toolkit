@@ -1,44 +1,59 @@
-# ============================================
-# DOMO Toolkit - VPS Deployment Guide
-# ============================================
+#!/bin/bash
+set -e
 
-# 1. Clone & setup backend
-cd /root
-git clone https://github.com/newli5737/domo-toolkit.git
-cd domo-toolkit/backend
+APP_DIR="/home/ubuntu/domo-toolkit"
+DOMAIN="api-domo.dosutech.site"
 
-# Tạo .venv và cài dependencies
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-# hoặc nếu dùng uv:
-# uv sync
+# Clone or pull
+cd /home/ubuntu
+if [ ! -d "$APP_DIR" ]; then
+    git clone https://github.com/newli5737/domo-toolkit.git
+else
+    cd $APP_DIR && git pull origin main
+fi
 
-# Copy .env lên VPS (chỉnh CORS_ORIGINS và DB)
-# CORS_ORIGINS=https://domo.vanquyenhair.name.vn
+cd $APP_DIR/backend
 
-# 2. Build frontend
-cd /root/domo-toolkit/frontend
-npm install
-# Tạo .env cho production
-echo "VITE_API_BASE=https://domo.vanquyenhair.name.vn" > .env
-npm run build
+# Install uv if not present
+if ! command -v uv &> /dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    source $HOME/.local/bin/env
+fi
 
-# 3. PM2 — chạy backend
-cd /root/domo-toolkit
+uv sync
+
+# Check .env
+if [ ! -f .env ]; then
+    echo "⚠️  .env not found! scp backend/.env to $APP_DIR/backend/.env first."
+    exit 1
+fi
+
+# PostgreSQL
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'domo-toolkit'" | \
+    grep -q 1 || sudo -u postgres createdb "domo-toolkit"
+
+# PM2
+if ! command -v pm2 &> /dev/null; then npm install -g pm2; fi
+cd $APP_DIR
+pm2 delete domo-backend 2>/dev/null || true
 pm2 start ecosystem.config.json
 pm2 save
-pm2 startup  # auto-start khi reboot
+pm2 startup systemd -u root --hp /root 2>/dev/null || true
 
-# 4. Nginx
-sudo cp domo.vanquyenhair.name.vn.conf /etc/nginx/sites-available/domo.vanquyenhair.name.vn.conf
-sudo ln -s /etc/nginx/sites-available/domo.vanquyenhair.name.vn.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+# Nginx
+sudo cp $APP_DIR/$DOMAIN.conf /etc/nginx/sites-available/$DOMAIN.conf
+[ ! -L /etc/nginx/sites-enabled/$DOMAIN.conf ] && \
+    sudo ln -s /etc/nginx/sites-available/$DOMAIN.conf /etc/nginx/sites-enabled/$DOMAIN.conf
+sudo nginx -t && sudo systemctl reload nginx
 
-# 5. Certbot SSL
-sudo certbot --nginx -d domo.vanquyenhair.name.vn
+# SSL
+if ! command -v certbot &> /dev/null; then
+    sudo apt install -y certbot python3-certbot-nginx
+fi
+sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m newli5737@gmail.com --redirect
 
-# 6. Verify
+# Verify
 pm2 status
-curl https://domo.vanquyenhair.name.vn/api/auth/status
+curl -s https://$DOMAIN/api/health | python3 -m json.tool

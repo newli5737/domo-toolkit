@@ -1,4 +1,4 @@
-"""BacklogRepository — Business logic cho Backlog API integration."""
+
 
 import logging
 import requests
@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 class BacklogRepository:
-    """Xử lý giao tiếp với Backlog REST API."""
 
     def __init__(self, db: Session = None):
         self.db = db

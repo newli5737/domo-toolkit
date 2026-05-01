@@ -21,7 +21,7 @@ export default function CardDashboard() {
   const [domoBase, setDomoBase] = useState('https://astecpaints-co-jp.domo.com')
   const [activeTab, setActiveTab] = useState<'cards' | 'dashboards' | 'low-usage'>('cards')
 
-  // ─── Cards state ───
+  // Cards state
   const [cards, setCards] = useState<Card[]>([])
   const [cTotal, setCTotal] = useState(0)
   const [cPage, setCPage] = useState(1)
@@ -34,7 +34,7 @@ export default function CardDashboard() {
   const [cSortBy, setCSortBy] = useState('view_count')
   const [cSortOrder, setCSortOrder] = useState('DESC')
 
-  // ─── Dashboards state ───
+  // Dashboards state
   const [dashes, setDashes] = useState<DashboardRow[]>([])
   const [dTotal, setDTotal] = useState(0)
   const [dPage, setDPage] = useState(1)
@@ -44,7 +44,7 @@ export default function CardDashboard() {
   const [dSortBy, setDSortBy] = useState('total_views')
   const [dSortOrder, setDSortOrder] = useState('DESC')
 
-  // ─── Low-usage state ───
+  // Low-usage state
   const [luData, setLuData] = useState<LowUsageData | null>(null)
   const [luLoading, setLuLoading] = useState(false)
   const [luThreshold, setLuThreshold] = useState(10)
@@ -230,7 +230,7 @@ export default function CardDashboard() {
           </button>
         </div>
 
-        {/* ═══ Cards Tab ═══ */}
+        {/* Cards Tab */}
         {activeTab === 'cards' && (
           <div className="card">
             <div className="card-header flex items-center justify-between">
@@ -341,7 +341,7 @@ export default function CardDashboard() {
           </div>
         )}
 
-        {/* ═══ Dashboards Tab ═══ */}
+        {/* Dashboards Tab */}
         {activeTab === 'dashboards' && (
           <div className="card">
             <div className="card-header flex items-center justify-between">
@@ -451,7 +451,7 @@ export default function CardDashboard() {
           </div>
         )}
 
-        {/* ═══ Low-Usage Tab ═══ */}
+        {/* Low-Usage Tab */}
         {activeTab === 'low-usage' && (
           <div className="space-y-4">
             {/* Controls */}
@@ -530,7 +530,7 @@ export default function CardDashboard() {
 
             {luData && !luLoading && (
               <>
-                {/* ── List view ── */}
+                {/* List view */}
                 {luView === 'list' && (
                   <div className="card">
                     <div className="card-header">
@@ -614,7 +614,7 @@ export default function CardDashboard() {
                   </div>
                 )}
 
-                {/* ── By Owner view ── */}
+                {/* By Owner view */}
                 {luView === 'by-owner' && (
                   <div className="card">
                     <div className="card-header flex items-center gap-2">
@@ -650,7 +650,7 @@ export default function CardDashboard() {
                 )}
 
 
-                {/* ── By Dataset view ── */}
+                {/* By Dataset view */}
                 {luView === 'by-dataset' && (
                   <div className="card">
                     <div className="card-header flex items-center gap-2">

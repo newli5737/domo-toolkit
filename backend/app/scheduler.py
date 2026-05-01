@@ -1,6 +1,4 @@
-"""Scheduler — APScheduler cron jobs for auto-check datasets & dataflows,
-DOMO midnight re-login, và Backlog midnight re-login.
-"""
+
 
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -11,30 +9,16 @@ log = logging.getLogger(__name__)
 
 _scheduler: BackgroundScheduler | None = None
 
-# Day name mapping
 DAY_MAP = {
     "mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
     "fri": "fri", "sat": "sat", "sun": "sun",
 }
 
-
-# ─── Job functions ────────────────────────────────────────────
-
-
 def _run_auto_check(manual_req=None, auth_override=None):
-    """Execute the auto-check logic: crawl dataflows → crawl datasets → check + alert.
-
-    Thứ tự bắt buộc:
-      1. Crawl dataflows (sync, chờ xong)
-      2. Crawl datasets  (sync, chờ xong)
-      3. Auto-check DB → post Backlog nếu BOTH conditions met
-    """
     import concurrent.futures
     from datetime import datetime, timezone
 
-    log.info("=" * 60)
-    log.info("⏰ [AUTO-CHECK] Bắt đầu — triggered by cron scheduler")
-    log.info("=" * 60)
+    log.info("[AUTO-CHECK] Bắt đầu")
 
     try:
         from app.config import get_settings
@@ -47,7 +31,7 @@ def _run_auto_check(manual_req=None, auth_override=None):
         from app.schemas.monitor import AutoCheckRequest
         from app.repositories.auth_repo import get_auth
 
-        # ── Load config & in ra để debug ────────────────────────────
+        # Load config
         db = SessionLocal()
         config = MonitorRepository(db).load_alert_config()
         settings = get_settings()
@@ -71,14 +55,8 @@ def _run_auto_check(manual_req=None, auth_override=None):
         service = MonitorService(api, db)
         max_workers = 10
 
-        # ════════════════════════════════════════════════════════════
-        # STEP 1: Crawl toàn bộ Dataflows (PHẢI CHẠY TRƯỚC dataset)
-        # Lý do: propagate_dataflow_status_to_datasets() sẽ ghi
-        #        last_execution_state vào output dataset của dataflow.
-        # ════════════════════════════════════════════════════════════
-        log.info("-" * 50)
-        log.info("[STEP 1/3] 🔄 Crawl Dataflows bắt đầu...")
-        log.info("-" * 50)
+        # STEP 1: Crawl Dataflows
+        log.info("[STEP 1/3] 🔄 Crawl Dataflows...")
 
         raw_dataflows = service.crawl_all_dataflows()
         log.info(f"[STEP 1] Search xong: {len(raw_dataflows)} dataflows thô")
@@ -113,19 +91,15 @@ def _run_auto_check(manual_req=None, auth_override=None):
 
         log.info(f"[STEP 1] Execution state distribution: {dict(df_state_dist)}")
         log.info(f"[STEP 1] Dataflows FAILED: {len(df_failed_list)} / {len(dataflow_details)}")
-        for f in df_failed_list[:10]:  # in tối đa 10 cái
+        for f in df_failed_list[:10]:  
             log.info(f"  ⚠️  FAILED Dataflow: [{f['id']}] {f.get('name','')[:60]}")
 
         service.save_dataflows(dataflow_details)
         service.propagate_dataflow_status_to_datasets(dataflow_details)
         log.info(f"[STEP 1] ✅ Xong — {len(dataflow_details)} dataflows lưu DB, propagated sang output datasets")
 
-        # ════════════════════════════════════════════════════════════
-        # STEP 2: Crawl toàn bộ Datasets (SAU khi propagate xong)
-        # ════════════════════════════════════════════════════════════
-        log.info("-" * 50)
-        log.info("[STEP 2/3] 🔄 Crawl Datasets bắt đầu...")
-        log.info("-" * 50)
+        # STEP 2: Crawl Datasets
+        log.info("[STEP 2/3] 🔄 Crawl Datasets...")
 
         dataset_details = service.crawl_all_datasets()
         total_ds = len(dataset_details)
@@ -174,16 +148,8 @@ def _run_auto_check(manual_req=None, auth_override=None):
         service.save_datasets(dataset_details)
         log.info(f"[STEP 2] ✅ Xong — {len(dataset_details)} datasets lưu DB")
 
-        # ════════════════════════════════════════════════════════════
-        # STEP 3: Kiểm tra điều kiện → Post Backlog / Gửi email
-        # Điều kiện post Backlog:
-        #   - provider_type = <Import Type cấu hình>
-        #   - card_count >= <min_card_count>
-        #   - KHÔNG có dataset nào FAILED thỏa 2 điều kiện trên
-        # ════════════════════════════════════════════════════════════
-        log.info("-" * 50)
-        log.info("[STEP 3/3] 🔍 Kiểm tra điều kiện post Backlog...")
-        log.info("-" * 50)
+        # STEP 3: Post Backlog / Email alert
+        log.info("[STEP 3/3] 🔍 Kiểm tra điều kiện...")
         if manual_req:
             req = manual_req
         else:
@@ -223,8 +189,7 @@ def _run_auto_check(manual_req=None, auth_override=None):
         repo = MonitorRepository(db)
         check_result = repo.run_auto_check(req.provider_type, req.min_card_count, req.alert_email)
         log.info(f"[STEP 3] Kết quả auto-check: {check_result}")
-        log.info("=" * 60)
-        log.info(f"✅ [AUTO-CHECK] HOÀN THÀNH")
+        log.info("✅ [AUTO-CHECK] HOÀN THÀNH")
         log.info(f"   backlog_posted        : {check_result.backlog_posted}")
         log.info(f"   email_sent            : {check_result.email_sent}")
         log.info(f"   failed_dataset_count  : {check_result.failed_dataset_count}")
@@ -239,7 +204,7 @@ def _run_auto_check(manual_req=None, auth_override=None):
 
 
 def _run_domo_relogin():
-    """Re-login DOMO lúc 0h00 mỗi ngày — session chỉ có hiệu lực 1 ngày."""
+    """Re-login DOMO (sessions expire after 24h)."""
     log.info("⏰ DOMO midnight re-login triggered")
     try:
         from app.config import get_settings
@@ -273,7 +238,7 @@ def init_scheduler(config: dict | None = None):
     _scheduler.start()
     log.info("🚀 Scheduler started (Asia/Tokyo)")
 
-    # ── Midnight re-login jobs (0h00 JST mỗi ngày) ──
+    # Jam jobs
     _scheduler.add_job(
         _run_domo_relogin,
         trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Tokyo"),
@@ -296,7 +261,6 @@ def init_scheduler(config: dict | None = None):
 
 
 def update_schedule(config: dict):
-    """Update or create the auto-check cron job based on config."""
     global _scheduler
     if _scheduler is None:
         return
@@ -338,7 +302,6 @@ def update_schedule(config: dict):
 
 
 def shutdown_scheduler():
-    """Shutdown the scheduler."""
     global _scheduler
     if _scheduler:
         _scheduler.shutdown(wait=False)

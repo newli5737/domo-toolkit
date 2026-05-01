@@ -1,4 +1,4 @@
-"""Card Router — Thin controller, chỉ nhận params và gọi Repository."""
+
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -19,13 +19,11 @@ def list_cards(
     params: CardFilterParams = Depends(),
     db: Session = Depends(get_db),
 ):
-    """Lấy danh sách cards với phân trang, filter, sort."""
     return CardRepository(db).get_paginated_cards(params)
 
 
 @router.get("/types", response_model=list[str])
 def get_card_types(db: Session = Depends(get_db)):
-    """Lấy danh sách card types cho filter dropdown."""
     return CardRepository(db).get_card_types()
 
 
@@ -34,13 +32,11 @@ def get_dashboards(
     params: DashboardFilterParams = Depends(),
     db: Session = Depends(get_db),
 ):
-    """Lấy tất cả dashboards với phân trang và sort."""
     return CardRepository(db).get_paginated_dashboards(params)
 
 
 @router.get("/stats", response_model=CardStatsResponse)
 def get_card_stats(db: Session = Depends(get_db)):
-    """Thống kê tổng quan."""
     return CardRepository(db).get_stats()
 
 
@@ -49,5 +45,4 @@ def get_low_usage_cards(
     params: LowUsageFilterParams = Depends(),
     db: Session = Depends(get_db),
 ):
-    """Phân tích cards ít sử dụng."""
     return CardRepository(db).get_low_usage(params)

@@ -1,4 +1,4 @@
-"""DomoLogger — Logging chi tiết ra console với colors."""
+
 
 import sys
 import traceback
@@ -6,7 +6,6 @@ from datetime import datetime
 
 
 class DomoLogger:
-    """Logger chi tiết — in ra console với timestamp, module name, và colors."""
 
     COLORS = {
         "INFO": "\033[36m",      # Cyan

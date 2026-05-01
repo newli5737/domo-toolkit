@@ -22,7 +22,7 @@ def cleanup_stale_jobs():
     except Exception as e:
         log.warn(f"Cleanup stale jobs lỗi: {e}")
 
-# ─── Global State & Synchronization ─────────────────────────────────
+# Global State
 crawl_cancel = threading.Event()
 ws_clients = []
 _ws_loop: asyncio.AbstractEventLoop | None = None
@@ -99,10 +99,9 @@ def _finish_progress(status: str = "done", message: str = ""):
     _broadcast_progress()
 
 
-# ─── Background Tasks ──────────────────────────────────────────────
+# Background Tasks
 
 def run_full_crawl(job_id: int):
-    """Background: 5 steps pipeline song song."""
     import queue as queue_mod
 
     db = SessionLocal()
@@ -116,8 +115,7 @@ def run_full_crawl(job_id: int):
     crawl_cancel.clear()
     _init_progress(job_id)
 
-    log.info("=" * 60)
-    log.info(f"🚀 BẮT ĐẦU CRAWL JOB #{job_id} (PIPELINE MODE)")
+    log.info(f"[CRAWL] Job #{job_id} started (PIPELINE)")
 
     try:
         repo = BeastModeRepository(db, auth)
@@ -231,7 +229,7 @@ def run_full_crawl(job_id: int):
             message=f"Hoàn tất: {summary['total']} BM", found=summary["total"], current_step=TOTAL_STEPS
         )
         _finish_progress("done", f"Hoàn tất: {summary['total']} BM")
-        log.success(f"🎉 CRAWL HOÀN TẤT! {summary['total']} BM ({total_time:.1f}s)")
+        log.success(f"[CRAWL] Done: {summary['total']} BM ({total_time:.1f}s)")
 
     except Exception as e:
         log.exception("❌ CRAWL LỖI", e)
@@ -244,7 +242,6 @@ def run_full_crawl(job_id: int):
 
 
 def run_view_and_analyze(job_id: int, low_view_threshold: int = 10):
-    """Background: phân tích lại từ DB (không crawl API)."""
     db = SessionLocal()
     auth = get_auth(db)
     api = DomoAPI(auth)
@@ -273,7 +270,6 @@ def run_view_and_analyze(job_id: int, low_view_threshold: int = 10):
 
 
 def run_retry_details(job_id: int):
-    """Background: retry fetch BM details thiếu expression."""
     db = SessionLocal()
     auth = get_auth(db)
     api = DomoAPI(auth)
@@ -326,7 +322,6 @@ def run_retry_details(job_id: int):
 
 
 def run_bm_only_crawl(job_id: int):
-    """Background: chỉ Step 1+2 (BM crawl + details), không crawl cards."""
     import queue as queue_mod
 
     db = SessionLocal()

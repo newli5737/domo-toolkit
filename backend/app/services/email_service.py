@@ -1,4 +1,4 @@
-"""Email Service — gửi email cảnh báo qua Gmail SMTP."""
+
 
 import smtplib
 from email.mime.text import MIMEText
@@ -15,18 +15,6 @@ def send_alert_email(
     from_email: str,
     app_password: str,
 ) -> bool:
-    """Gửi email cảnh báo qua Gmail SMTP.
-
-    Args:
-        subject: Tiêu đề email
-        body: Nội dung email (plain text)
-        to_email: Email nhận (hỗ trợ nhiều email cách nhau bằng dấu phẩy)
-        from_email: Gmail gửi
-        app_password: App password của Gmail
-
-    Returns:
-        True nếu gửi thành công
-    """
     try:
         # Hỗ trợ nhiều email: "a@x.com, b@x.com"
         recipients = [e.strip() for e in to_email.split(",") if e.strip()]

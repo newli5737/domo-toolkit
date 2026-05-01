@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: domo-db
+    restart: always
+    environment:
+      POSTGRES_DB: domo-toolkit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: domo-backend
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DATABASE_URL=postgresql://postgres:test1234@db:5432/domo-toolkit
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: domo-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:

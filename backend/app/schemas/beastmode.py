@@ -1,16 +1,10 @@
-"""BeastMode schemas — Request & Response models cho BeastMode endpoints."""
 
 from pydantic import BaseModel, Field
 from typing import Any
 
-
-# ─── Request ──────────────────────────────────────────────
-
 class ReanalyzeRequest(BaseModel):
     low_view_threshold: int = Field(default=10, ge=1, le=10000)
 
-
-# ─── Response ─────────────────────────────────────────────
 
 class CrawlStartResponse(BaseModel):
     job_id: int

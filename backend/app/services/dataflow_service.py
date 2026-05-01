@@ -18,7 +18,6 @@ class DataflowCrawlService:
         self.db = db
 
     def fetch_dataflow_execution_history(self, df_id: int | str, limit: int = 100, offset: int = 0) -> list[dict]:
-        """Lấy execution history của dataflow."""
         url = self.EXECUTIONS_HISTORY_URL.format(df_id, limit, offset)
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:
@@ -70,7 +69,6 @@ class DataflowCrawlService:
         return executions
 
     def crawl_all_dataflows(self, progress_callback=None) -> list[dict]:
-        """Search toàn bộ dataflows."""
         log.info("Bắt đầu crawl dataflows...")
 
         all_dataflows = []
@@ -128,7 +126,6 @@ class DataflowCrawlService:
         return all_dataflows
 
     def fetch_dataflow_executions(self, df_id: str) -> list[dict]:
-        """Lấy execution history gần nhất của 1 dataflow."""
         url = self.EXECUTIONS_URL.format(df_id)
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:
@@ -139,7 +136,6 @@ class DataflowCrawlService:
             return []
 
     def process_dataflow(self, df_stub: dict) -> dict | None:
-        """Xử lý 1 dataflow từ search result: lấy execution gần nhất."""
         df_id = str(df_stub.get("databaseId", ""))
         df_name = df_stub.get("name", "")
         owner = df_stub.get("ownedByName", "")
@@ -165,10 +161,6 @@ class DataflowCrawlService:
 
         if status or last_exec_state:
             has_failed = ("FAILED" in (status or "").upper()) or ("FAILED" in (last_exec_state or "").upper())
-            if has_failed:
-                log.info(f"  [DEBUG-DF] id={df_id}, name={df_name[:40]}, "
-                         f"search_status='{status}', exec_state='{last_exec_state}', "
-                         f"exec_count={len(executions)}")
 
         return {
             "id": df_id,
@@ -186,7 +178,6 @@ class DataflowCrawlService:
         }
 
     def save_dataflows(self, dataflows: list[dict]):
-        """Lưu dataflows vào DB (bỏ output_dataset_ids trước khi insert)."""
         if dataflows:
             from app.models.dataset import Dataflow
             from app.core.database import bulk_upsert
@@ -198,7 +189,6 @@ class DataflowCrawlService:
             log.info(f"Lưu {len(dataflows)} dataflows vào DB")
 
     def propagate_dataflow_status_to_datasets(self, dataflows: list[dict]):
-        """Cập nhật last_execution_state cho các output datasets."""
         from sqlalchemy import update
         from app.models.dataset import Dataset
         updated = 0

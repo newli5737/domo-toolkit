@@ -1,4 +1,4 @@
-"""CardService — Crawl danh sách card + lấy view count."""
+
 
 import json
 import time
@@ -10,7 +10,6 @@ log = DomoLogger("card")
 
 
 class CardService:
-    """Xử lý logic liên quan đến Card trong Domo."""
 
     ADMIN_SUMMARY_URL = "/api/content/v2/cards/adminsummary"
     CARD_INFO_URL = "/api/content/v1/cards"
@@ -20,7 +19,6 @@ class CardService:
         self.db = db
 
     def crawl_all_cards(self, job_id: int = None, progress_callback=None) -> list[dict]:
-        """Crawl tất cả card qua adminsummary API."""
         all_cards = []
         skip = 0
         batch_size = 100
@@ -76,7 +74,6 @@ class CardService:
 
     def fetch_view_counts(self, card_urns: list[str], batch_size: int = 50,
                           job_id: int = None, progress_callback=None):
-        """Lấy view count + datasource info cho list card URNs, lưu vào DB."""
         from sqlalchemy import update
         from app.models.card import Card
         
@@ -167,7 +164,6 @@ class CardService:
         log.info(f"Fetch view counts xong: {updated} updated, {errors} errors")
 
     def save_cards_from_summary(self, cards: list[dict]):
-        """Lưu card data từ adminsummary vào DB cards."""
         rows = []
         for card in cards:
             pages = card.get("pageHierarchy", [])
@@ -196,7 +192,6 @@ class CardService:
             log.info(f"Lưu {len(rows)} cards vào DB ({db_time:.1f}s)")
 
     def get_all_urns(self) -> list[str]:
-        """Lấy tất cả card URNs từ DB."""
         from app.models.card import Card
         result = self.db.query(Card.id).all()
         urns = [str(r[0]) for r in result]

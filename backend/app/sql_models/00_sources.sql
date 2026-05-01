@@ -1,0 +1,17 @@
+-- 00_sources.sql
+-- This file is a MARKER only.
+-- CSV loading with Japanese filenames is handled by the Python engine
+-- because DuckDB on Windows cannot read file paths with CJK characters.
+-- The engine pre-loads all CSVs via Python IO and registers them as tables
+-- before executing this and subsequent SQL models.
+-- 
+-- Tables available after loading:
+--   backlog_issue_list
+--   backlog_projects_list
+--   dc_excel_import
+--   dc_monthly_fee
+--   dc_history
+--   er_calendar
+--   creative_budget
+--   sub_lp
+SELECT 1 AS loaded;

@@ -1,4 +1,4 @@
-"""Monitor Router — Thin controller cho giám sát datasets & dataflows."""
+
 
 import io
 import threading
@@ -29,17 +29,23 @@ from app.services.monitor_tasks import (
 _log = DomoLogger("monitor")
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
 
-try:
-    _db_init = SessionLocal()
-    _alert_config = MonitorRepository(_db_init).load_alert_config()
-    _db_init.close()
-except Exception:
-    _alert_config = {}
+_alert_config: dict | None = None
+
+def _get_alert_config() -> dict:
+    global _alert_config
+    if _alert_config is None:
+        try:
+            db = SessionLocal()
+            _alert_config = MonitorRepository(db).load_alert_config()
+            db.close()
+        except Exception:
+            _alert_config = {}
+    return _alert_config
 
 
 from app.dependencies import require_auth
 
-# ─── Crawl endpoints (background tasks) ──────────────────────
+
 
 @router.post("/check", response_model=JobStatusResponse)
 def trigger_health_check(
@@ -51,7 +57,6 @@ def trigger_health_check(
     db: Session = Depends(get_db),
     auth=Depends(require_auth)
 ):
-    """Trigger health check ngay lập tức (background thread)."""
 
     if monitor_job["running"]:
         return JobStatusResponse(status="already_running", message="Health check đang chạy...", started_at=monitor_job["started_at"])
@@ -68,7 +73,6 @@ def trigger_health_check(
 
 @router.post("/crawl/datasets", response_model=JobStatusResponse)
 def crawl_datasets_only(max_workers: int = Query(default=10), db: Session = Depends(get_db), auth=Depends(require_auth)):
-    """Cào toàn bộ datasets (background thread)."""
     import concurrent.futures
     if monitor_job["running"]:
         return JobStatusResponse(status="already_running", message="Đang chạy crawl...")
@@ -85,7 +89,6 @@ def crawl_datasets_only(max_workers: int = Query(default=10), db: Session = Depe
 
 @router.post("/crawl/dataflows", response_model=JobStatusResponse)
 def crawl_dataflows_only(max_workers: int = Query(default=10), db: Session = Depends(get_db), auth=Depends(require_auth)):
-    """Cào toàn bộ dataflows (background thread)."""
     import concurrent.futures
     if monitor_job["running"]:
         return JobStatusResponse(status="already_running", message="Đang chạy crawl...")
@@ -100,11 +103,10 @@ def crawl_dataflows_only(max_workers: int = Query(default=10), db: Session = Dep
     return JobStatusResponse(status="started", message="Đang cào dataflows...")
 
 
-# ─── Read-only endpoints (dùng Repository) ────────────────
+
 
 @router.get("/status")
 def get_check_status():
-    """Xem trạng thái health check hiện tại."""
     if monitor_job["running"]:
         return {"status": "running", "started_at": monitor_job["started_at"], "progress": monitor_job.get("progress")}
     if monitor_job["result"]:
@@ -120,7 +122,6 @@ def list_datasets(
     offset: int = Query(default=0),
     db: Session = Depends(get_db)
 ):
-    """Danh sách datasets trong DB."""
     return MonitorRepository(db).list_datasets(provider_type, min_card_count, limit, offset)
 
 
@@ -131,19 +132,16 @@ def list_dataflows(
     offset: int = Query(default=0),
     db: Session = Depends(get_db)
 ):
-    """Danh sách dataflows trong DB."""
     return MonitorRepository(db).list_dataflows(status_filter, limit, offset)
 
 
 @router.get("/provider-types", response_model=ProviderTypesResponse)
 def get_provider_types(db: Session = Depends(get_db)):
-    """Lấy danh sách provider types."""
     return MonitorRepository(db).get_provider_types()
 
 
 @router.get("/datasets/{dataset_id}/schedule")
 def get_dataset_schedule(dataset_id: str, db: Session = Depends(get_db), auth=Depends(require_auth)):
-    """Lấy schedule của dataset qua Stream API."""
 
     row = db.execute(text("SELECT stream_id FROM datasets WHERE id = :id"), {"id": dataset_id}).mappings().first()
     stream_id = row.get("stream_id") if row else None
@@ -166,7 +164,6 @@ def get_dataset_schedule(dataset_id: str, db: Session = Depends(get_db), auth=De
 
 @router.get("/dataflows/{dataflow_id}/executions")
 def get_dataflow_executions(dataflow_id: str, limit: int = Query(default=100), offset: int = Query(default=0), db: Session = Depends(get_db), auth=Depends(require_auth)):
-    """Lấy execution history của dataflow."""
 
     api = DomoAPI(auth)
     service = MonitorService(api, db)
@@ -174,15 +171,15 @@ def get_dataflow_executions(dataflow_id: str, limit: int = Query(default=100), o
     return {"dataflow_id": dataflow_id, "total": len(executions), "executions": executions}
 
 
-# ─── Auto-Check + Alerts (dùng Repository) ────────────────
+
 
 @router.post("/auto-check", response_model=JobStatusResponse)
 def trigger_auto_check(req: AutoCheckRequest, db: Session = Depends(get_db), auth=Depends(require_auth)):
-    """Kiểm tra datasets DB → post Backlog nếu OK. Thực hiện cào dữ liệu qua background thread."""
+    cfg = _get_alert_config()
     if req.alert_email:
-        _alert_config["alert_email"] = req.alert_email
-    _alert_config["min_card_count"] = req.min_card_count
-    _alert_config["provider_type"] = req.provider_type
+        cfg["alert_email"] = req.alert_email
+    cfg["min_card_count"] = req.min_card_count
+    cfg["provider_type"] = req.provider_type
 
     if monitor_job.get("running"):
         return JobStatusResponse(status="already_running", message="Auto-check đang chạy ngầm...", started_at=monitor_job.get("started_at"))
@@ -196,7 +193,6 @@ def trigger_auto_check(req: AutoCheckRequest, db: Session = Depends(get_db), aut
 
 @router.get("/alerts", response_model=AlertDataResponse)
 def get_alerts(db: Session = Depends(get_db)):
-    """Trả về danh sách datasets/dataflows có vấn đề."""
     if not alert_data.get("checked_at"):
         try:
             repo = MonitorRepository(db)
@@ -212,44 +208,44 @@ def get_alerts(db: Session = Depends(get_db)):
 
 @router.post("/save-alert-config", response_model=SaveConfigResponse)
 def save_alert_config_endpoint(req: AutoCheckRequest, db: Session = Depends(get_db)):
-    """Lưu cấu hình alert email + schedule."""
-    _alert_config.update(
+    cfg = _get_alert_config()
+    cfg.update(
         alert_email=req.alert_email, min_card_count=req.min_card_count,
         provider_type=req.provider_type, schedule_enabled=req.schedule_enabled,
         schedule_hour=req.schedule_hour, schedule_minute=req.schedule_minute,
         schedule_days=req.schedule_days,
     )
-    MonitorRepository(db).save_alert_config(_alert_config)
+    MonitorRepository(db).save_alert_config(cfg)
 
     try:
         from app.scheduler import update_schedule
-        update_schedule(_alert_config)
+        update_schedule(cfg)
     except Exception as e:
         print(f"[SAVE-CONFIG] Scheduler update error: {e}")
 
-    return SaveConfigResponse(saved=True, config=_alert_config)
+    return SaveConfigResponse(saved=True, config=cfg)
 
 
 @router.get("/auto-check-config", response_model=AutoCheckConfigResponse)
 def get_auto_check_config():
-    """Trả về config cho FE Settings."""
     settings = get_settings()
+    cfg = _get_alert_config()
     return AutoCheckConfigResponse(
         backlog_base_url=settings.backlog_base_url,
         backlog_issue_id=settings.backlog_issue_id,
         has_backlog_cookie=False,
-        alert_email_to=_alert_config.get("alert_email", ""),
-        min_card_count=_alert_config.get("min_card_count", 40),
-        provider_type=_alert_config.get("provider_type", "mysql-ssh"),
+        alert_email_to=cfg.get("alert_email", ""),
+        min_card_count=cfg.get("min_card_count", 40),
+        provider_type=cfg.get("provider_type", "mysql-ssh"),
         has_gmail=bool(settings.gmail_email and settings.gmail_app_password),
-        schedule_enabled=_alert_config.get("schedule_enabled", False),
-        schedule_hour=_alert_config.get("schedule_hour", 8),
-        schedule_minute=_alert_config.get("schedule_minute", 0),
-        schedule_days=_alert_config.get("schedule_days", "mon,tue,wed,thu,fri"),
+        schedule_enabled=cfg.get("schedule_enabled", False),
+        schedule_hour=cfg.get("schedule_hour", 8),
+        schedule_minute=cfg.get("schedule_minute", 0),
+        schedule_days=cfg.get("schedule_days", "mon,tue,wed,thu,fri"),
     )
 
 
-# ─── CSV Export (dùng Repository) ─────────────────────────
+
 
 @router.get("/export/datasets/csv")
 def export_datasets_csv(
@@ -258,7 +254,6 @@ def export_datasets_csv(
     search: str = Query(default=""),
     db: Session = Depends(get_db)
 ):
-    """Xuất datasets ra CSV."""
     csv_bytes = MonitorRepository(db).export_datasets_csv(provider_type, min_card_count, search)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -274,7 +269,6 @@ def export_dataflows_csv(
     search: str = Query(default=""),
     db: Session = Depends(get_db)
 ):
-    """Xuất dataflows ra CSV."""
     csv_bytes = MonitorRepository(db).export_dataflows_csv(status_filter, search)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

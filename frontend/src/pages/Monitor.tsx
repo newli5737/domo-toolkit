@@ -19,7 +19,7 @@ export default function Monitor() {
     loadDatasets, loadDataflows,
   } = useMonitor()
 
-  // ─── Sort icons ────────────────────────────────────
+  // Sort icons
 
   const DsSortIcon = ({ field }: { field: keyof DatasetRow }) => (
     <span className="ml-0.5 text-[10px]">
@@ -32,7 +32,7 @@ export default function Monitor() {
     </span>
   )
 
-  // ─── Helpers ───────────────────────────────────────
+  // Helpers
 
   const getStatusBadge = (status: string) => {
     const upper = (status || '').toUpperCase()
@@ -114,9 +114,8 @@ export default function Monitor() {
         <div className="flex gap-1 mt-4 border-b border-slate-200 -mb-[21px]">
           {tabs.map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${
-                tab === tb.key ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}>
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${tab === tb.key ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}>
               {tb.label}
             </button>
           ))}
@@ -150,7 +149,7 @@ export default function Monitor() {
           </div>
         )}
 
-        {/* ─── Tab: Overview ─── */}
+        {/* Tab: Overview */}
         {tab === 'overview' && (
           <>
             {/* Filters */}
@@ -279,7 +278,7 @@ export default function Monitor() {
           </>
         )}
 
-        {/* ─── Tab: Datasets ─── */}
+        {/* Tab: Datasets */}
         {tab === 'datasets' && (
           <div className="card">
             <div className="card-header flex items-center justify-between">
@@ -295,7 +294,7 @@ export default function Monitor() {
                 <div className="relative">
                   <select value={filters.dsFilterType} onChange={e => updateFilters({ dsFilterType: e.target.value })}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 appearance-none bg-white pr-7"
-                    style={{minWidth: 140}}>
+                    style={{ minWidth: 140 }}>
                     <option value="">{lang === 'vi' ? 'Tất cả loại' : 'すべての種類'}</option>
                     {providerTypes.map(pt => (<option key={pt} value={pt}>{pt}</option>))}
                   </select>
@@ -303,7 +302,7 @@ export default function Monitor() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <select value={filters.dsFilterCardDir} onChange={e => updateFilters({ dsFilterCardDir: e.target.value })}
-                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 bg-white" style={{minWidth: 80}}>
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-400 bg-white" style={{ minWidth: 80 }}>
                     <option value="">Cards</option>
                     <option value="gte">≥</option>
                     <option value="lt">&lt;</option>
@@ -319,14 +318,14 @@ export default function Monitor() {
                   if (filters.dsFilterType) params.set('provider_type', filters.dsFilterType)
                   if (filters.dsFilterCardDir === 'gte') params.set('min_card_count', String(filters.dsFilterCardVal))
                   monitorService.exportDatasetsCsv(params.toString())
-                }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
+                }} className="btn btn-outline" style={{ padding: '6px 12px' }} title="Export CSV">
                   <FileDown className="w-3.5 h-3.5" /> CSV
                 </button>
-                <button onClick={crawlDs} disabled={crawl.loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
+                <button onClick={crawlDs} disabled={crawl.loading} className="btn btn-primary" style={{ padding: '6px 12px' }}>
                   {crawl.crawlType === 'datasets' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDatasets')}
                 </button>
-                <button onClick={loadDatasets} className="btn btn-outline" style={{padding:'6px 12px'}}>
+                <button onClick={loadDatasets} className="btn btn-outline" style={{ padding: '6px 12px' }}>
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -381,33 +380,33 @@ export default function Monitor() {
                       return dsSort.sortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map((ds, idx) => (
-                    <tr key={ds.id}>
-                      <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
-                      <td className="font-medium max-w-[300px] truncate">{ds.name}</td>
-                      <td>{ds.dataset_status ? <span className="badge badge-gray">{ds.dataset_status}</span> : <span className="text-slate-300">-</span>}</td>
-                      <td>{ds.last_execution_state ? getStatusBadge(ds.last_execution_state) : <span className="text-slate-300">-</span>}</td>
-                      <td>{ds.row_count?.toLocaleString() || '-'}</td>
-                      <td>{ds.card_count || '-'}</td>
-                      <td><span className="badge badge-gray">{ds.provider_type || '-'}</span></td>
-                      <td className="text-sm">
-                        <div className="text-slate-700">{fmtTime(ds.last_updated)}</div>
-                        {ds.updated_at && <div className="text-slate-400 text-xs mt-0.5" title={lang === 'vi' ? 'Thời gian cào' : 'クロール時刻'}>⟳ {fmtTimeShort(ds.updated_at)}</div>}
-                      </td>
-                      <td>
-                        <a href={`${domoBase}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
-                          className="text-slate-400 hover:text-blue-500 transition-colors" title="Open in Domo">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
+                      <tr key={ds.id}>
+                        <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
+                        <td className="font-medium max-w-[300px] truncate">{ds.name}</td>
+                        <td>{ds.dataset_status ? <span className="badge badge-gray">{ds.dataset_status}</span> : <span className="text-slate-300">-</span>}</td>
+                        <td>{ds.last_execution_state ? getStatusBadge(ds.last_execution_state) : <span className="text-slate-300">-</span>}</td>
+                        <td>{ds.row_count?.toLocaleString() || '-'}</td>
+                        <td>{ds.card_count || '-'}</td>
+                        <td><span className="badge badge-gray">{ds.provider_type || '-'}</span></td>
+                        <td className="text-sm">
+                          <div className="text-slate-700">{fmtTime(ds.last_updated)}</div>
+                          {ds.updated_at && <div className="text-slate-400 text-xs mt-0.5" title={lang === 'vi' ? 'Thời gian cào' : 'クロール時刻'}>⟳ {fmtTimeShort(ds.updated_at)}</div>}
+                        </td>
+                        <td>
+                          <a href={`${domoBase}/datasources/${ds.id}/details/overview`} target="_blank" rel="noopener noreferrer"
+                            className="text-slate-400 hover:text-blue-500 transition-colors" title="Open in Domo">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* ─── Tab: Dataflows ─── */}
+        {/* Tab: Dataflows */}
         {tab === 'dataflows' && (
           <div className="card">
             <div className="card-header flex items-center justify-between">
@@ -424,14 +423,14 @@ export default function Monitor() {
                   const params = new URLSearchParams()
                   if (filters.dfSearch.trim()) params.set('search', filters.dfSearch.trim())
                   monitorService.exportDataflowsCsv(params.toString())
-                }} className="btn btn-outline" style={{padding:'6px 12px'}} title="Export CSV">
+                }} className="btn btn-outline" style={{ padding: '6px 12px' }} title="Export CSV">
                   <FileDown className="w-3.5 h-3.5" /> CSV
                 </button>
-                <button onClick={crawlDf} disabled={crawl.loading} className="btn btn-primary" style={{padding:'6px 12px'}}>
+                <button onClick={crawlDf} disabled={crawl.loading} className="btn btn-primary" style={{ padding: '6px 12px' }}>
                   {crawl.crawlType === 'dataflows' ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t('monitor.crawlDataflows')}
                 </button>
-                <button onClick={loadDataflows} className="btn btn-outline" style={{padding:'6px 12px'}}>
+                <button onClick={loadDataflows} className="btn btn-outline" style={{ padding: '6px 12px' }}>
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -459,7 +458,7 @@ export default function Monitor() {
                   {dataflows
                     .filter(df => !filters.dfSearch.trim() || df.name?.toLowerCase().includes(filters.dfSearch.trim().toLowerCase()))
                     .sort((a, b) => {
-                      const statusPri = (s: string) => ['FAILED','ERROR','failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
+                      const statusPri = (s: string) => ['FAILED', 'ERROR', 'failed'].includes(s) ? 0 : ['stale'].includes(s) ? 1 : 2
                       const aPri = statusPri(a.last_execution_state || '')
                       const bPri = statusPri(b.last_execution_state || '')
                       if (aPri !== bPri) return aPri - bPri
@@ -469,30 +468,30 @@ export default function Monitor() {
                       return dfSort.sortOrder === 'ASC' ? cmp : -cmp
                     })
                     .map((df, idx) => (
-                    <tr key={df.id}>
-                      <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
-                      <td className="font-medium max-w-[300px] truncate">{df.name}</td>
-                      <td>
-                        {df.status ? <span className="badge badge-gray">{df.status}</span> : <span className="text-slate-300">-</span>}
-                        {df.paused && <span className="badge badge-gray ml-1">{t('monitor.paused')}</span>}
-                      </td>
-                      <td>
-                        {df.last_execution_state ? getStatusBadge(df.last_execution_state) : <span className="text-slate-300">-</span>}
-                      </td>
-                      <td className="text-sm">
-                        <div className="text-slate-700">{fmtTime(df.last_execution_time)}</div>
-                        {df.updated_at && <div className="text-slate-400 text-xs mt-0.5" title={lang === 'vi' ? 'Thời gian cào' : 'クロール時刻'}>⟳ {fmtTimeShort(df.updated_at)}</div>}
-                      </td>
-                      <td>{df.execution_count || '-'}</td>
-                      <td className="text-slate-500 text-sm truncate max-w-[150px]">{df.owner || '-'}</td>
-                      <td>
-                        <a href={`${domoBase}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
-                          className="text-slate-400 hover:text-purple-500 transition-colors" title="Open in Domo">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
+                      <tr key={df.id}>
+                        <td className="text-center text-slate-400 text-xs">{idx + 1}</td>
+                        <td className="font-medium max-w-[300px] truncate">{df.name}</td>
+                        <td>
+                          {df.status ? <span className="badge badge-gray">{df.status}</span> : <span className="text-slate-300">-</span>}
+                          {df.paused && <span className="badge badge-gray ml-1">{t('monitor.paused')}</span>}
+                        </td>
+                        <td>
+                          {df.last_execution_state ? getStatusBadge(df.last_execution_state) : <span className="text-slate-300">-</span>}
+                        </td>
+                        <td className="text-sm">
+                          <div className="text-slate-700">{fmtTime(df.last_execution_time)}</div>
+                          {df.updated_at && <div className="text-slate-400 text-xs mt-0.5" title={lang === 'vi' ? 'Thời gian cào' : 'クロール時刻'}>⟳ {fmtTimeShort(df.updated_at)}</div>}
+                        </td>
+                        <td>{df.execution_count || '-'}</td>
+                        <td className="text-slate-500 text-sm truncate max-w-[150px]">{df.owner || '-'}</td>
+                        <td>
+                          <a href={`${domoBase}/datacenter/dataflows/${df.id}/details#settings`} target="_blank" rel="noopener noreferrer"
+                            className="text-slate-400 hover:text-purple-500 transition-colors" title="Open in Domo">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

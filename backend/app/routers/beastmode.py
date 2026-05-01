@@ -1,4 +1,4 @@
-"""Beast Mode Router — Thin controller. Pipeline logic giữ nguyên, read-only dùng Repository."""
+
 
 import io
 import json
@@ -34,18 +34,9 @@ from app.services.bm_crawler import (
 
 from app.dependencies import require_auth
 
-router = APIRouter(prefix="/api/beastmode", tags=["beastmode"])
-log = DomoLogger("bm-router")
-
-
-
-
-
-# ─── Write endpoints (trigger background tasks) ──────────
 
 @router.post("/crawl", response_model=CrawlStartResponse)
 async def start_crawl(background_tasks: BackgroundTasks, db: Session = Depends(get_db), auth: Session = Depends(require_auth)):
-    """Bắt đầu crawl toàn bộ BM + cards. CẦN LOGIN."""
     job_id = BeastModeRepository(db).create_crawl_job("beastmode_full", "Đang khởi tạo...", TOTAL_STEPS)
     background_tasks.add_task(run_full_crawl, job_id)
     return CrawlStartResponse(job_id=job_id, message="Crawl đã bắt đầu")
@@ -53,7 +44,6 @@ async def start_crawl(background_tasks: BackgroundTasks, db: Session = Depends(g
 
 @router.post("/crawl/reanalyze", response_model=CrawlStartResponse)
 async def start_reanalyze(body: ReanalyzeRequest = ReanalyzeRequest(), background_tasks: BackgroundTasks = None, db: Session = Depends(get_db)):
-    """Phân tích lại từ DB. KHÔNG CẦN LOGIN."""
     threshold = max(1, min(body.low_view_threshold, 10000))
     job_id = BeastModeRepository(db).create_crawl_job("beastmode_full", "Đang khởi tạo (reanalyze)...", 2)
     background_tasks.add_task(run_view_and_analyze, job_id, threshold)
@@ -62,7 +52,6 @@ async def start_reanalyze(body: ReanalyzeRequest = ReanalyzeRequest(), backgroun
 
 @router.post("/crawl/retry-details", response_model=CrawlStartResponse)
 async def start_retry_details(background_tasks: BackgroundTasks, db: Session = Depends(get_db), auth: Session = Depends(require_auth)):
-    """Retry fetch BM details. CẦN LOGIN."""
     job_id = BeastModeRepository(db).create_crawl_job("beastmode_full", "Retry BM Details...", 2)
     background_tasks.add_task(run_retry_details, job_id)
     return CrawlStartResponse(job_id=job_id, message="Retry BM Details đã bắt đầu")
@@ -70,7 +59,6 @@ async def start_retry_details(background_tasks: BackgroundTasks, db: Session = D
 
 @router.post("/crawl/bm-only", response_model=CrawlStartResponse)
 async def start_bm_only_crawl(background_tasks: BackgroundTasks, db: Session = Depends(get_db), auth: Session = Depends(require_auth)):
-    """Chỉ crawl BM + details. CẦN LOGIN."""
     job_id = BeastModeRepository(db).create_crawl_job("beastmode_full", "BM-Only Crawl...", 2)
     background_tasks.add_task(run_bm_only_crawl, job_id)
     return CrawlStartResponse(job_id=job_id, message="BM-Only Crawl đã bắt đầu")
@@ -78,29 +66,23 @@ async def start_bm_only_crawl(background_tasks: BackgroundTasks, db: Session = D
 
 @router.post("/crawl/cancel", response_model=CancelResponse)
 async def cancel_crawl(db: Session = Depends(get_db), auth: Session = Depends(require_auth)):
-    """Hủy crawl đang chạy. CẦN LOGIN."""
     crawl_cancel.set()
     BeastModeRepository(db).cancel_stale_jobs()
     return CancelResponse(message="Đã gửi yêu cầu hủy crawl")
 
 
-# ─── Read-only endpoints (dùng Repository) ────────────────
-
 @router.get("/status", response_model=CrawlStatusResponse)
 async def crawl_status(db: Session = Depends(get_db)):
-    """Lấy trạng thái crawl hiện tại."""
     return BeastModeRepository(db).get_crawl_status()
 
 
 @router.get("/summary")
 async def get_summary(db: Session = Depends(get_db)):
-    """Lấy tổng hợp kết quả phân tích."""
     return BeastModeRepository(db).get_summary()
 
 
 @router.get("/group/{group_number}", response_model=GroupDataResponse)
 async def get_group(group_number: int, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
-    """Lấy danh sách BM theo nhóm."""
     if group_number not in (1, 2, 3, 4):
         raise HTTPException(status_code=400, detail="group_number phải từ 1-4")
     return BeastModeRepository(db).get_group_data(group_number, limit, offset)
@@ -108,7 +90,6 @@ async def get_group(group_number: int, limit: int = 100, offset: int = 0, db: Se
 
 @router.get("/search", response_model=SearchResponse)
 async def search_beastmode(q: str = "", limit: int = 50, db: Session = Depends(get_db)):
-    """Tìm BM theo tên hoặc ID."""
     if not q.strip():
         return SearchResponse()
     return BeastModeRepository(db).search(q, limit)
@@ -116,7 +97,6 @@ async def search_beastmode(q: str = "", limit: int = 50, db: Session = Depends(g
 
 @router.get("/export/csv")
 async def export_csv(lang: str = "vi", group: int = 0, db: Session = Depends(get_db)):
-    """Tải file CSV kết quả phân tích."""
     csv_bytes = BeastModeRepository(db).export_csv(group, lang)
 
     if not csv_bytes:
@@ -131,23 +111,18 @@ async def export_csv(lang: str = "vi", group: int = 0, db: Session = Depends(get
 
 @router.delete("/{bm_id}")
 async def delete_beastmode(bm_id: int, db: Session = Depends(get_db), auth: Session = Depends(require_auth)):
-    """Xóa BM khỏi tất cả cards. CẦN LOGIN."""
     result = BeastModeRepository(db, auth).delete_bm(bm_id)
     if not result.success:
         raise HTTPException(status_code=400, detail=result.error)
     return result
 
 
-# ─── WebSocket (real-time progress) ───────────────────────
-
 @router.websocket("/ws/progress")
 async def ws_progress(websocket: WebSocket):
-    """WebSocket: nhận crawl progress real-time."""
     await websocket.accept()
     register_ws_client(websocket, asyncio.get_event_loop())
 
     try:
-        while True:
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")

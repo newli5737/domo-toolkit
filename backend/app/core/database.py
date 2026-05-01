@@ -25,7 +25,6 @@ def get_db():
         db.close()
 
 def bulk_upsert(session, model, rows: list[dict], index_elements: list[str]):
-    """Thực thi UPSERT an toàn cho nhiều dialect để ngăn chặn UniqueViolation."""
     if not rows:
         return
     dialect = session.bind.dialect.name

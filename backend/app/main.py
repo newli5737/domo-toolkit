@@ -10,9 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.core.database import engine, Base
-import app.models  # Load all models for metadata
+import app.models
 
-from app.routers import auth, beastmode, monitor, backlog, card
+from app.routers import auth, beastmode, monitor, backlog, card, pipeline
 
 app = FastAPI(
     title="DOMO Toolkit",
@@ -20,7 +20,7 @@ app = FastAPI(
     version="0.2.0",
 )
 
-# CORS cho frontend (đọc từ .env hoặc mặc định localhost)
+# CORS
 settings = get_settings()
 cors_origins = [
     o.strip() for o in settings.cors_origins.split(",") if o.strip()
@@ -44,15 +44,18 @@ app.include_router(beastmode.router)
 app.include_router(monitor.router)
 app.include_router(backlog.router)
 app.include_router(card.router)
+app.include_router(pipeline.router)
 
 
 @app.on_event("startup")
 def startup():
-    """Tạo bảng DB khi khởi động + auto-login nếu có cấu hình."""
-    settings = get_settings()
-    
     Base.metadata.create_all(bind=engine)
-    print(f"✅ DB schema initialized ({settings.db_name}) with SQLAlchemy")
+    
+    try:
+        from migrate_db import run_migrations
+        run_migrations()
+    except Exception as e:
+        print(f"Migration error: {e}")
 
     from app.services.bm_crawler import cleanup_stale_jobs
     cleanup_stale_jobs()

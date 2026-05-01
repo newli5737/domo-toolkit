@@ -18,7 +18,6 @@ class DatasetCrawlService:
         self.db = db
 
     def crawl_all_datasets(self, progress_callback=None) -> list[dict]:
-        """Search toàn bộ datasets qua /api/data/ui/v3/datasources/search."""
         log.info("Bắt đầu crawl datasets...")
         DatasetCrawlService._detail_debug_count = 0  # Reset debug counter
 
@@ -65,10 +64,6 @@ class DatasetCrawlService:
             for i, ds in enumerate(datasets):
                 card_info = ds.get("cardInfo", {})
 
-                if offset == 0 and i < 3:
-                    type_keys = {k: v for k, v in ds.items()
-                                 if 'type' in k.lower() or 'provider' in k.lower() or 'transport' in k.lower()}
-                    log.info(f"  [DEBUG-SEARCH] Dataset #{i}: name={ds.get('name','')[:40]}, type_fields={type_keys}")
 
                 schedule_active = ds.get("scheduleActive")
                 if schedule_active is True:
@@ -116,7 +111,6 @@ class DatasetCrawlService:
         return all_datasets
 
     def fetch_dataset_detail(self, dataset_id: str) -> dict | None:
-        """Lấy chi tiết 1 dataset."""
         url = self.DATASOURCE_DETAIL_URL.format(dataset_id)
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:
@@ -138,13 +132,6 @@ class DatasetCrawlService:
         if not provider_type:
             provider_type = display_type or data_provider_type or dp_type or root_type or ""
 
-        DatasetCrawlService._detail_debug_count += 1
-        if DatasetCrawlService._detail_debug_count <= 5:
-            log.info(f"  [DEBUG-DETAIL] id={dataset_id}, name={data.get('name','')[:40]}, "
-                     f"FINAL='{provider_type}', displayType='{display_type}', "
-                     f"dataProviderType='{data_provider_type}', dp.name='{dp_name}', "
-                     f"dp.type='{dp_type}', root.type='{root_type}', "
-                     f"STATE='{data.get('state','')}', STATUS='{data.get('status','')}'")
 
         return {
             "id": str(data.get("id", dataset_id)),
@@ -162,7 +149,6 @@ class DatasetCrawlService:
         }
 
     def save_datasets(self, datasets: list[dict]):
-        """Lưu datasets vào DB."""
         rows = []
         for ds in datasets:
             last_updated = ds.get("last_updated")
@@ -196,13 +182,9 @@ class DatasetCrawlService:
             from app.core.database import bulk_upsert
             bulk_upsert(self.db, Dataset, rows, ["id"])
             self.db.commit()
-            from collections import Counter
-            pt_counts = Counter(r.get("provider_type", "") for r in rows)
             log.info(f"Lưu {len(rows)} datasets vào DB")
-            log.info(f"  [DEBUG] provider_type distribution: {dict(pt_counts)}")
 
     def fetch_dataset_schedule(self, stream_id: int | str) -> dict | None:
-        """Lấy thông tin schedule của dataset qua Stream API."""
         url = self.STREAM_DETAIL_URL.format(stream_id)
         resp = self.api.get(url)
         if not resp or resp.status_code != 200:

@@ -1,4 +1,4 @@
-"""Cấu hình ứng dụng — đọc từ .env."""
+
 
 from pydantic_settings import BaseSettings
 from functools import lru_cache
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Backlog
     backlog_base_url: str = "https://mothers-sp.backlog.jp"
     backlog_issue_id: str = ""
-    backlog_api_key: str = ""   # Backlog REST API key — không cần login, không hết hạn
+    backlog_api_key: str = ""
 
     # Email Alert (Gmail SMTP)
     gmail_email: str = ""

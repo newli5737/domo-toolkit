@@ -12,7 +12,7 @@ from app.core.logger import DomoLogger
 
 _log = DomoLogger("monitor-tasks")
 
-# ─── Global state ─────────────────────────────────────────
+
 
 monitor_job = {
     "running": False, "started_at": None, "result": None, "progress": None,
@@ -28,7 +28,6 @@ def set_progress(step: str, processed: int, total: int):
 
 
 def post_crawl_alert(db: Session):
-    """Sau mỗi lần crawl, kiểm tra FAILED."""
     repo = MonitorRepository(db)
     alert = repo.get_alerts_from_db()
     alert_data["checked_at"] = alert.checked_at

@@ -18,13 +18,12 @@ _log = DomoLogger("monitor-repo")
 
 
 class MonitorRepository:
-    """Repository cho phần đọc dữ liệu Monitor từ DB."""
 
     def __init__(self, db: Session):
         self.db = db
         self.settings = get_settings()
 
-    # ─── Alert Config (app_settings table) ─────────────────
+    # Alert Config
 
     def load_alert_config(self) -> dict:
         try:
@@ -74,7 +73,7 @@ class MonitorRepository:
             self.db.rollback()
             _log.error(f"Save alert config error: {e}")
 
-    # ─── Dataset queries ───────────────────────────────────
+    # Dataset queries
 
     def list_datasets(self, provider_type: str = "", min_card_count: int = 0,
                       limit: int = 5000, offset: int = 0) -> DatasetListResponse:
@@ -107,7 +106,7 @@ class MonitorRepository:
         ).distinct().order_by(Dataset.provider_type).all()
         return ProviderTypesResponse(provider_types=[r[0] for r in rows if r[0]])
 
-    # ─── Alerts ────────────────────────────────────────────
+    # Alerts
 
     def get_alerts_from_db(self) -> AlertDataResponse:
         # Exclude DISABLED datasets
@@ -141,16 +140,13 @@ class MonitorRepository:
             failed_dataflows=all_df,
         )
 
-    # ─── Auto Check Logic ─────────────────────────────────
+    # Auto Check Logic
 
     def run_auto_check(self, provider_type: str, min_card_count: int, alert_email: str) -> AutoCheckResult:
         """Kiểm tra datasets/dataflows trong DB → post Backlog nếu OK."""
         import requests as http_requests
 
-        _log.info("=" * 60)
-        _log.info("[AUTO-CHECK] ▶ Bắt đầu kiểm tra điều kiện")
-        _log.info(f"  provider_type  : '{provider_type}'")
-        _log.info(f"  min_card_count : {min_card_count}")
+        _log.info(f"[AUTO-CHECK] Start: type={provider_type}, cards={min_card_count}")
 
         # Cond 1: provider_type FAILED
         failed_by_type = []
@@ -248,11 +244,10 @@ class MonitorRepository:
             except Exception as e:
                 _log.error(f"Backlog error: {e}")
 
-        _log.info(f"[AUTO-CHECK] Done → backlog={result.backlog_posted}")
-        _log.info("=" * 60)
+        _log.info(f"[AUTO-CHECK] Done -> backlog={result.backlog_posted}")
         return result
 
-    # ─── CSV Export ────────────────────────────────────────
+    # CSV Export
 
     def export_datasets_csv(self, provider_type: str = "", min_card_count: int = 0, search: str = "") -> bytes:
         query = self.db.query(Dataset)
