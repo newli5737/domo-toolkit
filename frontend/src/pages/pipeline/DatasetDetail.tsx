@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Save, FileSpreadsheet, CreditCard, Columns3, Database, Clock, HardDrive } from 'lucide-react'
-import { apiGet, apiPut } from '../api'
-import { useI18n } from '../i18n'
+import { apiGet, apiPut } from '../../api'
+import { useI18n } from '../../i18n'
 
 interface ColumnInfo { name: string; type: string; samples: (string | null)[]; null_count: number; distinct_count: number }
 interface CardInfo { id: number; title: string; endpoint: string; chart_type: string; description: string }
