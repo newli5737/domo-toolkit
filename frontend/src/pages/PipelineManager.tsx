@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Play, RefreshCw, CheckCircle2, XCircle, Clock, Database,
   ChevronLeft, ChevronRight, Search,
-  TrendingUp, BarChart3, PieChart, Layers, Loader2
+  TrendingUp, BarChart3, PieChart, Layers, Loader2,
+  FolderOpen, CreditCard, FileSpreadsheet, HardDrive
 } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
 
@@ -43,6 +44,32 @@ interface PipelineData {
   page_size: number
 }
 
+interface DatasetInfo {
+  name: string
+  size_bytes: number
+  rows?: number | null
+  columns?: number
+}
+
+interface DatasetsResponse {
+  inputs: DatasetInfo[]
+  outputs: DatasetInfo[]
+}
+
+interface YoYRow {
+  month: string
+  current_year: number
+  prev_year: number
+  yoy_ratio: number | null
+}
+
+interface YoYData {
+  exists: boolean
+  title: string
+  rows: YoYRow[]
+  totals: { current_year: number; prev_year: number; yoy_ratio: number | null }
+}
+
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   idle: { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' },
   running: { bg: '#dbeafe', text: '#2563eb', border: '#93c5fd' },
@@ -65,8 +92,10 @@ export default function PipelineManager() {
   const [page, setPage] = useState(1)
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'overview' | 'data' | 'pipeline'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'datasets' | 'data' | 'cards' | 'pipeline'>('overview')
   const [loading, setLoading] = useState(false)
+  const [datasets, setDatasets] = useState<DatasetsResponse | null>(null)
+  const [yoyData, setYoyData] = useState<YoYData | null>(null)
 
   // Fetch pipeline status
   const fetchStatus = useCallback(async () => {
@@ -106,6 +135,14 @@ export default function PipelineManager() {
     if (status.status === 'success') fetchSummary()
   }, [status.status])
   useEffect(() => { if (activeTab === 'data') fetchData() }, [activeTab, page, category, search])
+  useEffect(() => {
+    if (activeTab === 'datasets' && !datasets) {
+      apiGet<DatasetsResponse>('/api/pipeline/datasets').then(setDatasets).catch(() => {})
+    }
+    if (activeTab === 'cards' && !yoyData) {
+      apiGet<YoYData>('/api/pipeline/card/yoy').then(setYoyData).catch(() => {})
+    }
+  }, [activeTab])
 
   const runPipeline = async () => {
     try {
@@ -177,10 +214,12 @@ export default function PipelineManager() {
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#f1f5f9', borderRadius: 10, padding: 4 }}>
           {([
-            { key: 'overview', label: 'Overview', icon: PieChart },
-            { key: 'data', label: 'Data Explorer', icon: Layers },
-            { key: 'pipeline', label: 'Pipeline Steps', icon: BarChart3 },
-          ] as const).map(tab => {
+            { key: 'overview' as const, label: 'Overview', icon: PieChart },
+            { key: 'datasets' as const, label: 'Datasets', icon: FolderOpen },
+            { key: 'data' as const, label: 'Data Explorer', icon: Layers },
+            { key: 'cards' as const, label: 'Cards', icon: CreditCard },
+            { key: 'pipeline' as const, label: 'Pipeline Steps', icon: BarChart3 },
+          ]).map(tab => {
             const Icon = tab.icon
             return (
               <button
@@ -410,6 +449,102 @@ export default function PipelineManager() {
                 <BarChart3 style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }} />
                 <p style={{ fontSize: 15, fontWeight: 600 }}>No pipeline run data</p>
                 <p style={{ fontSize: 13 }}>Run the pipeline to see execution steps</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Datasets Tab */}
+        {activeTab === 'datasets' && (
+          <div className="animate-fadein">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="card">
+                <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileSpreadsheet style={{ width: 16, height: 16, color: '#3b82f6' }} /> Input Datasets ({datasets?.inputs.length ?? 0})
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  {datasets?.inputs.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                      <FileSpreadsheet style={{ width: 18, height: 18, color: '#10b981', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{(d.size_bytes / 1024).toFixed(0)} KB{d.rows != null ? ` · ${d.rows.toLocaleString()} rows` : ''}</div>
+                      </div>
+                    </div>
+                  )) ?? <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>Loading...</div>}
+                </div>
+              </div>
+              <div className="card">
+                <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <HardDrive style={{ width: 16, height: 16, color: '#8b5cf6' }} /> Output Datasets ({datasets?.outputs.length ?? 0})
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  {datasets?.outputs.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                      <HardDrive style={{ width: 18, height: 18, color: '#8b5cf6', flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{d.name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{(d.size_bytes / 1024 / 1024).toFixed(1)} MB{d.rows != null ? ` · ${d.rows.toLocaleString()} rows` : ''}{d.columns ? ` · ${d.columns} cols` : ''}</div>
+                      </div>
+                    </div>
+                  )) ?? <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>Loading...</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cards Tab — 売上昨対比 */}
+        {activeTab === 'cards' && (
+          <div className="animate-fadein">
+            {yoyData?.exists ? (
+              <div className="card">
+                <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#D9EBFD', fontWeight: 700 }}>
+                  <CreditCard style={{ width: 16, height: 16 }} />
+                  {yoyData.title} — Card #186671670
+                </div>
+                <div className="card-body table-wrapper" style={{ padding: 0 }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr style={{ background: '#D9EBFD' }}>
+                        <th>請求月</th>
+                        <th style={{ textAlign: 'right' }}>当年</th>
+                        <th style={{ textAlign: 'right' }}>前年</th>
+                        <th style={{ textAlign: 'right' }}>昨対比</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {yoyData.rows.map((r, i) => {
+                        const ratio = r.yoy_ratio
+                        const bg = ratio == null ? '#fff' : ratio >= 1 ? '#D9EBFD' : '#FDDDDD'
+                        return (
+                          <tr key={i}>
+                            <td style={{ fontWeight: 600 }}>{r.month}</td>
+                            <td style={{ textAlign: 'right' }}>¥{r.current_year.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right' }}>¥{r.prev_year.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', background: bg, fontWeight: 700 }}>
+                              {ratio != null ? `${(ratio * 100).toFixed(2)}%` : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      <tr style={{ fontWeight: 800, borderTop: '2px solid #e2e8f0' }}>
+                        <td>合計</td>
+                        <td style={{ textAlign: 'right' }}>¥{yoyData.totals.current_year.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>¥{yoyData.totals.prev_year.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', background: yoyData.totals.yoy_ratio != null && yoyData.totals.yoy_ratio >= 1 ? '#D9EBFD' : '#FDDDDD' }}>
+                          {yoyData.totals.yoy_ratio != null ? `${(yoyData.totals.yoy_ratio * 100).toFixed(2)}%` : '—'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+                <CreditCard style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }} />
+                <p style={{ fontSize: 15, fontWeight: 600 }}>No card data</p>
+                <p style={{ fontSize: 13 }}>Run the pipeline first to generate output</p>
               </div>
             )}
           </div>

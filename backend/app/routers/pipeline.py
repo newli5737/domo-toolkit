@@ -241,3 +241,137 @@ def get_pipeline_summary(dataflow_id: str = Query("215")):
         }
     finally:
         con.close()
+
+
+@router.get("/datasets")
+def get_datasets(dataflow_id: str = Query("215")):
+    """List input and output datasets."""
+    import duckdb
+
+    input_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "datainput"))
+    output_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput"))
+
+    inputs = []
+    if os.path.isdir(input_dir):
+        for f in sorted(os.listdir(input_dir)):
+            fp = os.path.join(input_dir, f)
+            if os.path.isfile(fp):
+                size = os.path.getsize(fp)
+                rows = None
+                if f.endswith(".csv"):
+                    try:
+                        con = duckdb.connect()
+                        rows = con.execute(f"SELECT COUNT(*) FROM read_csv_auto('{fp.replace(chr(92), '/')}')").fetchone()[0]
+                        con.close()
+                    except Exception:
+                        pass
+                inputs.append({"name": f, "size_bytes": size, "rows": rows})
+
+    outputs = []
+    db_path = os.path.normpath(os.path.join(output_dir, "output.duckdb"))
+    csv_path = os.path.normpath(os.path.join(output_dir, "output.csv"))
+    if os.path.exists(db_path):
+        try:
+            con = duckdb.connect(db_path, read_only=True)
+            rows = con.execute("SELECT COUNT(*) FROM pipeline_output").fetchone()[0]
+            cols = con.execute("SELECT * FROM pipeline_output LIMIT 0").description
+            con.close()
+            outputs.append({
+                "name": "output.duckdb",
+                "size_bytes": os.path.getsize(db_path),
+                "rows": rows,
+                "columns": len(cols),
+            })
+        except Exception:
+            pass
+    if os.path.exists(csv_path):
+        outputs.append({
+            "name": "output.csv",
+            "size_bytes": os.path.getsize(csv_path),
+        })
+
+    return {"inputs": inputs, "outputs": outputs}
+
+
+@router.get("/card/yoy")
+def get_card_yoy(dataflow_id: str = Query("215")):
+    """Card 186671670: 売上昨対比 — Year-over-Year revenue pivot table.
+    
+    Beast modes translated from DOMO card definition:
+    - ROW: 請求月. = concat(MONTH(請求日), '月')
+    - 当年 = SUM(CASE WHEN YEAR(請求日) = YEAR(CURRENT_DATE) THEN 税抜費用(int))
+    - 前年 = SUM(CASE WHEN YEAR(請求日) = YEAR(CURRENT_DATE) - 1 THEN 税抜費用(int))
+    - 昨対比 = 当年 / 前年
+    Filter: BLカテゴリ = '課題リスト', 請求月. IS NOT NULL/empty
+    """
+    import duckdb
+
+    db_path = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "dataoutput", "output.duckdb"))
+    if not os.path.exists(db_path):
+        return {"exists": False}
+
+    con = duckdb.connect(db_path, read_only=True)
+    try:
+        result = con.execute("""
+            WITH base AS (
+                SELECT
+                    CAST("請求日" AS DATE) AS billing_date,
+                    CAST("税抜費用（int）" AS BIGINT) AS amount
+                FROM pipeline_output
+                WHERE "BLカテゴリ" = '課題リスト'
+                  AND "請求日" IS NOT NULL
+            ),
+            current_year AS (
+                SELECT YEAR(CURRENT_DATE) AS cy
+            ),
+            monthly AS (
+                SELECT
+                    MONTH(b.billing_date) AS m,
+                    CONCAT(MONTH(b.billing_date), '月') AS month_label,
+                    SUM(CASE WHEN YEAR(b.billing_date) = cy.cy THEN b.amount END) AS current_year,
+                    SUM(CASE WHEN YEAR(b.billing_date) = cy.cy - 1 THEN b.amount END) AS prev_year
+                FROM base b, current_year cy
+                GROUP BY 1, 2, cy.cy
+                HAVING CONCAT(MONTH(b.billing_date), '月') != ''
+            )
+            SELECT
+                month_label,
+                COALESCE(current_year, 0) AS current_year,
+                COALESCE(prev_year, 0) AS prev_year,
+                CASE
+                    WHEN prev_year IS NOT NULL AND prev_year > 0
+                    THEN ROUND(CAST(current_year AS DOUBLE) / prev_year, 4)
+                    ELSE NULL
+                END AS yoy_ratio
+            FROM monthly
+            ORDER BY m
+        """).fetchall()
+
+        # Totals
+        total_current = sum(r[1] for r in result)
+        total_prev = sum(r[2] for r in result)
+        total_yoy = round(total_current / total_prev, 4) if total_prev > 0 else None
+
+        rows = []
+        for r in result:
+            rows.append({
+                "month": r[0],
+                "current_year": r[1],
+                "prev_year": r[2],
+                "yoy_ratio": r[3],
+            })
+
+        return {
+            "exists": True,
+            "card_id": 186671670,
+            "title": "売上昨対比",
+            "chart_type": "badge_pivot_table",
+            "rows": rows,
+            "totals": {
+                "current_year": total_current,
+                "prev_year": total_prev,
+                "yoy_ratio": total_yoy,
+            },
+        }
+    finally:
+        con.close()
