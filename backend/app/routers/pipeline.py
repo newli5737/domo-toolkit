@@ -137,7 +137,86 @@ def list_dataflows():
     return result
 
 
-# ── Data Explorer ───────────────────────────────────────
+# ── Sync from DOMO ──────────────────────────────────────
+
+_sync_status: dict = {}
+
+def _do_sync(dataflow_id: str):
+    """Download all input datasets from DOMO using the export API."""
+    global _sync_status
+    import requests as req_lib
+    from app.repositories.auth_repo import get_auth
+
+    cfg = _load_config(dataflow_id)
+    inputs = cfg.get("inputs", [])
+    if not inputs:
+        _sync_status = {"status": "failed", "error": "No inputs configured in config.json"}
+        return
+
+    auth = get_auth()
+    if not auth.is_valid:
+        _sync_status = {"status": "failed", "error": "DOMO session expired. Please login first."}
+        return
+
+    base_url = f"https://{auth.instance}"
+    input_dir = os.path.normpath(os.path.join(DATAFLOW_BASE, dataflow_id, "datainput"))
+    os.makedirs(input_dir, exist_ok=True)
+
+    session = req_lib.Session()
+    for k, v in auth.cookies.items():
+        session.cookies.set(k, v)
+
+    results = []
+    for i, inp in enumerate(inputs):
+        domo_id = inp.get("domo_id", "")
+        filename = inp.get("file", "")
+        name = inp.get("name", filename)
+        _sync_status["current"] = f"{name} ({i+1}/{len(inputs)})"
+
+        if not domo_id or not filename:
+            results.append({"name": name, "status": "skipped", "error": "Missing domo_id or file"})
+            continue
+
+        try:
+            url = f"{base_url}/api/query/v1/execute/export/{domo_id}"
+            params = {"accept": "text/csv", "disableFormulaInterpretation": "true", "includeHeader": "true"}
+            r = session.get(url, params=params, timeout=120)
+            if r.status_code == 200 and "text/csv" in r.headers.get("content-type", ""):
+                filepath = os.path.join(input_dir, filename)
+                with open(filepath, "wb") as f:
+                    f.write(r.content)
+                rows = r.content.count(b"\n") - 1
+                results.append({"name": name, "file": filename, "status": "ok", "size": len(r.content), "rows": rows})
+            else:
+                results.append({"name": name, "status": "error", "http_status": r.status_code, "error": r.text[:200]})
+        except Exception as e:
+            results.append({"name": name, "status": "error", "error": str(e)})
+
+    ok = sum(1 for r in results if r["status"] == "ok")
+    _sync_status = {
+        "status": "success" if ok == len(inputs) else "partial",
+        "finished_at": time.time(),
+        "total": len(inputs), "ok": ok,
+        "results": results,
+    }
+
+
+@router.post("/sync")
+def sync_from_domo(req: PipelineRunRequest, background_tasks: BackgroundTasks):
+    """Download fresh input CSVs from DOMO."""
+    global _sync_status
+    if _sync_status.get("status") == "syncing":
+        return {"status": "syncing", "message": "Sync already running", "current": _sync_status.get("current", "")}
+    _sync_status = {"status": "syncing", "started_at": time.time()}
+    background_tasks.add_task(_do_sync, req.dataflow_id)
+    return {"status": "syncing", "message": "Sync started"}
+
+
+@router.get("/sync/status")
+def get_sync_status():
+    return _sync_status or {"status": "idle"}
+
+
 
 @router.get("/data", response_model=PipelineDataResponse)
 def get_pipeline_data(

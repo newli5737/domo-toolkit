@@ -4,7 +4,7 @@ import {
   Play, RefreshCw, CheckCircle2, XCircle, Clock, Database,
   ChevronLeft, ChevronRight, Search,
   TrendingUp, BarChart3, PieChart, Layers, Loader2,
-  FolderOpen, FileSpreadsheet, HardDrive, ChevronDown
+  FolderOpen, FileSpreadsheet, HardDrive, ChevronDown, CloudDownload
 } from 'lucide-react'
 import { apiGet, apiPost } from '../api'
 import PipelineSteps from './pipeline/PipelineSteps'
@@ -49,6 +49,8 @@ export default function PipelineManager() {
   const [activeTab, setActiveTab] = useState<'overview' | 'datasets' | 'data' | 'pipeline'>('overview')
   const [loading, setLoading] = useState(false)
   const [datasets, setDatasets] = useState<DatasetsResponse | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
 
 
   // Fetch dataflow list
@@ -84,6 +86,20 @@ export default function PipelineManager() {
 
   const runPipeline = async () => {
     try { await apiPost('/api/pipeline/run', { dataflow_id: dfId, reference_date: refDate || null }); fetchStatus() } catch { /* */ }
+  }
+
+  const syncFromDomo = async () => {
+    setSyncing(true); setSyncMsg('Syncing...')
+    try {
+      await apiPost('/api/pipeline/sync', { dataflow_id: dfId })
+      const poll = setInterval(async () => {
+        try {
+          const s = await apiGet<any>('/api/pipeline/sync/status')
+          if (s.status === 'syncing') { setSyncMsg(s.current || 'Downloading...') }
+          else { clearInterval(poll); setSyncing(false); setSyncMsg(s.status === 'success' ? `Done! ${s.ok}/${s.total}` : s.error || 'Partial'); setTimeout(() => setSyncMsg(''), 5000); if (activeTab === 'datasets') apiGet<DatasetsResponse>(`/api/pipeline/datasets?dataflow_id=${dfId}`).then(setDatasets).catch(() => {}) }
+        } catch { clearInterval(poll); setSyncing(false) }
+      }, 2000)
+    } catch { setSyncing(false); setSyncMsg('Failed') }
   }
 
   const StatusIcon = STATUS_ICONS[status.status] || Clock
@@ -208,6 +224,14 @@ export default function PipelineManager() {
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <FileSpreadsheet style={{ width: 16, height: 16, color: '#3b82f6' }} /> Input Datasets ({datasets?.inputs.length ?? 0})
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {syncMsg && <span style={{ fontSize: 11, color: syncing ? '#3b82f6' : '#10b981', fontWeight: 600 }}>{syncMsg}</span>}
+                  <button onClick={syncFromDomo} disabled={syncing} className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {syncing ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : <CloudDownload style={{ width: 14, height: 14 }} />}
+                    {syncing ? 'Syncing...' : 'Sync DOMO'}
+                  </button>
+                </div>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
                 {datasets?.inputs.map((d, i) => (

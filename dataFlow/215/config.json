@@ -16,5 +16,15 @@
       "chart_type": "badge_pivot_table",
       "description": "Revenue by billing month pivoted by year"
     }
+  ],
+  "inputs": [
+    {"name": "Backlog_issue_list", "file": "Backlog_issue_list.csv", "domo_id": "0e3f0439-619e-4b0e-8b16-06e2eaebd169"},
+    {"name": "Backlog_Projects_list", "file": "Backlog_Projects_list.csv", "domo_id": "de0deef5-e496-4d95-a28d-03734e8b513d"},
+    {"name": "DC課_Domo取り込み1,2月案件.xlsx", "file": "DC課_Domo取り込み1,2月案件.xlsx.csv", "domo_id": "16c492b5-6933-4c75-b113-f907b078fea8"},
+    {"name": "ER_calendar", "file": "ER_calendar.csv", "domo_id": "e90ce3aa-c48f-44ae-991f-be767ac2a041"},
+    {"name": "DC課_月額費用", "file": "DC課_月額費用.csv", "domo_id": "dcdfa8bd-bd52-4bf4-b80e-64b3244dce17"},
+    {"name": "月額費用_サブスクLP", "file": "月額費用_サブスクLP.csv", "domo_id": "f828819f-da50-4f82-a2a0-a1b80d8b4647"},
+    {"name": "クリエイティブ予算", "file": "クリエイティブ予算.csv", "domo_id": "a433bfcc-6090-481b-a0b1-ffa3c20b5025"},
+    {"name": "DC課_粗利過去データ", "file": "DC課_粗利過去データ.csv", "domo_id": "30b2f16b-82f9-4dea-8aa0-280938bd7fb7"}
   ]
 }
