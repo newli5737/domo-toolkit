@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Play, RefreshCw, CheckCircle2, XCircle, Clock, Database,
-  ChevronLeft, ChevronRight, Search, Filter, Download,
+  ChevronLeft, ChevronRight, Search,
   TrendingUp, BarChart3, PieChart, Layers, Loader2
 } from 'lucide-react'
-import { apiGet, apiPost, apiDownload } from '../api'
+import { apiGet, apiPost } from '../api'
 
 interface ModelStep {
   name: string
