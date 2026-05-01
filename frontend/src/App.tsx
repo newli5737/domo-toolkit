@@ -13,6 +13,7 @@ import CardDashboard from './pages/CardDashboard'
 import PipelineManager from './pages/PipelineManager'
 import DatasetDetailPage from './pages/pipeline/DatasetDetail'
 import CardDetailPage from './pages/pipeline/CardViewer'
+import EmbedCard from './pages/pipeline/EmbedCard'
 import Login from './pages/Login'
 
 export default function App() {
@@ -57,6 +58,33 @@ export default function App() {
   return (
     <I18nProvider>
       <BrowserRouter>
+        <Routes>
+          {/* Embed routes — standalone, no sidebar */}
+          <Route path="/embed/card/:dataflowId/:cardEndpoint" element={<EmbedCard />} />
+        </Routes>
+
+        {/* Check if we're on embed route — hide main layout */}
+        <MainLayout
+          loggedIn={loggedIn}
+          username={username}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          onLogout={handleLogout}
+          onLoginSuccess={handleLogin}
+        />
+      </BrowserRouter>
+    </I18nProvider>
+  )
+}
+
+function MainLayout({ loggedIn, username, sidebarCollapsed, onToggle, onLogout, onLoginSuccess }: {
+  loggedIn: boolean; username: string; sidebarCollapsed: boolean
+  onToggle: () => void; onLogout: () => void; onLoginSuccess: (u: string) => void
+}) {
+  // Hide main layout on embed routes
+  if (window.location.pathname.startsWith('/embed/')) return null
+
+  return (
         <div className="flex min-h-screen">
           <Sidebar
             loggedIn={loggedIn}
@@ -84,7 +112,5 @@ export default function App() {
             </Routes>
           </div>
         </div>
-      </BrowserRouter>
-    </I18nProvider>
   )
 }

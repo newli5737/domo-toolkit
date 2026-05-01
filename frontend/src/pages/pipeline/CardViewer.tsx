@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft, Filter, X, CreditCard } from 'lucide-react'
+import { ChevronLeft, Filter, X, CreditCard, ExternalLink, Copy, Check } from 'lucide-react'
 import { apiGet } from '../../api'
 import { useI18n } from '../../i18n'
 
@@ -17,6 +17,7 @@ export default function CardDetailPage() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [cardData, setCardData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [embedCopied, setEmbedCopied] = useState(false)
 
   useEffect(() => {
     apiGet<{ filters: FilterOption[] }>(`/api/pipeline/card/filters?dataflow_id=${dfId}`)
@@ -40,6 +41,13 @@ export default function CardDetailPage() {
 
   const title = cardData?.title || endpoint
 
+  const embedUrl = `${window.location.origin}/embed/card/${dfId}/${endpoint}?lang=${lang}&title=${encodeURIComponent(title)}`
+  const copyEmbed = () => {
+    navigator.clipboard.writeText(embedUrl)
+    setEmbedCopied(true)
+    setTimeout(() => setEmbedCopied(false), 3000)
+  }
+
   return (
     <div className="animate-fadein">
       <div className="page-header">
@@ -61,8 +69,22 @@ export default function CardDetailPage() {
               Card #{cardData?.card_id} · {cardData?.chart_type || 'pivot_table'} · Dataflow {dfId}
             </div>
           </div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button onClick={copyEmbed} className="btn btn-outline" title={embedUrl}
+              style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.2s',
+                ...(embedCopied ? { background: '#dcfce7', borderColor: '#86efac', color: '#15803d' } : {}),
+              }}>
+              {embedCopied ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
+              {embedCopied ? (lang === 'vi' ? 'Đã sao chép!' : 'コピー済み!') : 'Embed Link'}
+            </button>
+            <a href={embedUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline"
+              style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none' }}>
+              <ExternalLink style={{ width: 14, height: 14 }} />
+              {lang === 'vi' ? 'Xem trước' : 'プレビュー'}
+            </a>
+          </div>
         </div>
-      </div>
 
       <div className="page-body">
         {/* Filter bar */}
